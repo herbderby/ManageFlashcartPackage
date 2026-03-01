@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "go-language-server": {
+      "command": "/Users/herb/go/bin/mcp-language-server",
+      "args": [
+        "--workspace",
+        "/Users/herb/Developer/ManageFlashcartPackage",
+        "--lsp",
+        "/Users/herb/go/bin/gopls"
+      ]
+    }
+  }
+}
