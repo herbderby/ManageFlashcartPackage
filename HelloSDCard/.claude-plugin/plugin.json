@@ -1,0 +1,5 @@
+{
+  "name": "HelloSDCard",
+  "version": "0.1.0",
+  "description": "Proof of concept: list mounted volumes from a bundled Go MCP server"
+}

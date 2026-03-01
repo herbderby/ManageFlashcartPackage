@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "hello-sdcard": {
+      "command": "${CLAUDE_PLUGIN_ROOT}/bin/hello-sdcard",
+      "cwd": "${CLAUDE_PLUGIN_ROOT}"
+    }
+  }
+}

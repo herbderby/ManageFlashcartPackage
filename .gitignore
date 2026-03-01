@@ -1,5 +1,5 @@
-# Binaries
-bin/
+# Binaries (root only; HelloSDCard/bin/ is a distributable plugin artifact)
+/bin/
 *.exe
 *.exe~
 *.dll
