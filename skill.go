@@ -91,17 +91,25 @@ limit: 44 KiB per image.
 4. GameTDB coverS images are typically already 128x115.
 5. Save as _nds/TWiLightMenu/boxart/{TID}.png.
 
-### Non-NDS Games (libretro thumbnails)
+### Non-NDS Games (SHA1 lookup + libretro thumbnails)
 
-1. Determine the system from the file extension.
-2. Map extension to libretro system name (see table below).
-3. URL-encode the ROM filename (without extension) for the URL.
-4. Download from libretro:
+Always hash the ROM first to resolve the canonical No-Intro name.
+This handles renamed ROMs correctly. Fall back to the filename only
+for homebrew, hacks, and bad dumps not in the database.
+
+1. Call compute_sha1 on the ROM file to get its SHA1 hash.
+2. Call lookup_nointro with the SHA1 hash.
+3. If found (found=true): use the returned name and system for the URL.
+4. If not found (found=false): fall back to the ROM filename without
+   extension as the name, and map the extension to the libretro system
+   name using the table below.
+5. URL-encode the name for the URL. Download from libretro:
    https://thumbnails.libretro.com/{System}/Named_Boxarts/{Name}.png
-5. Resize to 128x115 with resize_image (libretro images are oversized).
-6. Save as _nds/TWiLightMenu/boxart/{full_rom_filename}.png.
+6. Resize to 128x115 with resize_image (libretro images are oversized).
+7. Save as _nds/TWiLightMenu/boxart/{full_rom_filename}.png.
 
-File extension to libretro system name:
+Fallback extension to libretro system name (used only when SHA1 lookup
+returns found=false):
   .gb  -> Nintendo - Game Boy
   .gbc -> Nintendo - Game Boy Color
   .gba -> Nintendo - Game Boy Advance
@@ -118,9 +126,6 @@ File extension to libretro system name:
   .int -> Mattel - Intellivision
   .ngp -> SNK - Neo Geo Pocket
   .ws  -> Bandai - WonderSwan
-
-Libretro filenames follow No-Intro naming conventions exactly.
-Mismatches return 404. Try URL-encoded filename first.
 
 IMPORTANT: After writing box art to the card, run clean_dot_files.
 
@@ -565,32 +570,21 @@ d. GameTDB coverS images are already 128x115 -- no resizing needed.
 
 For each non-NDS ROM file found:
 
-a. Map the file extension to libretro system name:
-     .gb  = Nintendo - Game Boy
-     .gbc = Nintendo - Game Boy Color
-     .gba = Nintendo - Game Boy Advance
-     .nes = Nintendo - Nintendo Entertainment System
-     .sfc = Nintendo - Super Nintendo Entertainment System
-     .sms = Sega - Master System - Mark III
-     .gg  = Sega - Game Gear
-     .gen = Sega - Mega Drive - Genesis
-     .pce = NEC - PC Engine - TurboGrafx 16
-     .a26 = Atari - 2600
-     .a52 = Atari - 5200
-     .a78 = Atari - 7800
-     .col = Coleco - ColecoVision
-     .int = Mattel - Intellivision
-     .ngp = SNK - Neo Geo Pocket
-     .ws  = Bandai - WonderSwan
+a. Call compute_sha1 on the ROM file to get its SHA1 hash.
 
-b. Get the ROM filename without extension. URL-encode it for the URL
-   (spaces become %20, parentheses stay as-is).
+b. Call lookup_nointro with the SHA1 hash.
 
-c. Call download_file with:
+c. If found (found=true): use the returned name and system from the
+   lookup result. If not found (found=false): use the ROM filename
+   without extension as the name, and map the extension to the libretro
+   system name (see flashcart_knowledge for the mapping table).
+
+d. URL-encode the name (spaces become %20, parentheses stay as-is).
+   Call download_file with:
      url: https://thumbnails.libretro.com/<System>/Named_Boxarts/<Name>.png
      path: /tmp/boxart_<filename>.png
 
-d. Call resize_image with:
+e. Call resize_image with:
      source: /tmp/boxart_<filename>.png
      destination: CARD/_nds/TWiLightMenu/boxart/<full_rom_filename>.png
      width: 128
@@ -672,22 +666,16 @@ For NDS ROMs:
      Fallback regions if US fails: EN, then JA.
 
 For non-NDS ROMs:
-  a. Map the extension to libretro system name:
-       .gb=Nintendo - Game Boy  .gbc=Nintendo - Game Boy Color
-       .gba=Nintendo - Game Boy Advance
-       .nes=Nintendo - Nintendo Entertainment System
-       .sfc=Nintendo - Super Nintendo Entertainment System
-       .sms=Sega - Master System - Mark III  .gg=Sega - Game Gear
-       .gen=Sega - Mega Drive - Genesis
-       .pce=NEC - PC Engine - TurboGrafx 16
-       .a26=Atari - 2600  .a52=Atari - 5200  .a78=Atari - 7800
-       .col=Coleco - ColecoVision  .int=Mattel - Intellivision
-       .ngp=SNK - Neo Geo Pocket  .ws=Bandai - WonderSwan
-  b. URL-encode the filename without extension.
-  c. Call download_file with:
+  a. Call compute_sha1 on the ROM file to get its SHA1 hash.
+  b. Call lookup_nointro with the SHA1 hash.
+  c. If found (found=true): use the returned name and system.
+     If not found (found=false): use the ROM filename without
+     extension as the name, and map the extension to the libretro
+     system name (see flashcart_knowledge for the mapping table).
+  d. URL-encode the name. Call download_file with:
        url: https://thumbnails.libretro.com/<System>/Named_Boxarts/<Name>.png
        path: /tmp/boxart_temp.png
-  d. Call resize_image with:
+  e. Call resize_image with:
        source: /tmp/boxart_temp.png
        destination: CARD/_nds/TWiLightMenu/boxart/<full_rom_filename>.png
        width: 128

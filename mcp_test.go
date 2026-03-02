@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -91,7 +93,7 @@ func TestPromptsGet(t *testing.T) {
 		{"flashcart_init", ace, "Wood R4 Kernel Installation"},
 		{"flashcart_twilight_install", ace, "TWiLight Menu++ Installation"},
 		{"flashcart_emulators", ace, "Virtual Console Emulators"},
-		{"flashcart_boxart", nil, "Box Art Download"},
+		{"flashcart_boxart", nil, "compute_sha1"},
 		{"flashcart_add_game", map[string]string{"source_path": "/tmp/test.nds"}, "Add a ROM"},
 		{"flashcart_cleanup", nil, "Flashcart Volume Cleanup"},
 		{"flashcart_manual", nil, "User Manual"},
@@ -258,7 +260,7 @@ func TestMissingModelArg(t *testing.T) {
 	}
 }
 
-// TestToolsList verifies that all 18 tools are registered.
+// TestToolsList verifies that all 20 tools are registered.
 func TestToolsList(t *testing.T) {
 	session := connect(t)
 	defer session.Close()
@@ -271,7 +273,8 @@ func TestToolsList(t *testing.T) {
 	want := []string{
 		"list_volumes", "list_directory", "create_directory",
 		"move_file", "copy_file", "delete_file", "file_exists",
-		"read_bytes", "download_file", "fetch_url",
+		"read_bytes", "compute_sha1", "lookup_nointro",
+		"download_file", "fetch_url",
 		"extract_archive", "resize_image", "image_info",
 		"read_file", "write_file", "read_json", "write_json",
 		"clean_dot_files",
@@ -291,5 +294,121 @@ func TestToolsList(t *testing.T) {
 	if len(result.Tools) != len(want) {
 		t.Errorf("ListTools returned %d tools, want %d",
 			len(result.Tools), len(want))
+	}
+}
+
+// TestComputeSHA1 verifies the compute_sha1 tool with a file of
+// known content. SHA1("hello\n") = f572d396fae9206628714fb2ce00f72e94f2258f.
+func TestComputeSHA1(t *testing.T) {
+	session := connect(t)
+	defer session.Close()
+
+	tmp := t.TempDir()
+	path := tmp + "/test.bin"
+	if err := os.WriteFile(path, []byte("hello\n"), 0o644); err != nil {
+		t.Fatalf("write test file: %v", err)
+	}
+
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "compute_sha1",
+		Arguments: map[string]any{"path": path},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+
+	text := result.Content[0].(*mcp.TextContent).Text
+	var out ComputeSHA1Result
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	wantSHA1 := "f572d396fae9206628714fb2ce00f72e94f2258f"
+	if out.SHA1 != wantSHA1 {
+		t.Errorf("SHA1 = %q, want %q", out.SHA1, wantSHA1)
+	}
+	if out.FileSize != 6 {
+		t.Errorf("FileSize = %d, want 6", out.FileSize)
+	}
+}
+
+// TestLookupNoIntro_Found verifies that a known ROM SHA1 returns the
+// correct No-Intro name and system.
+func TestLookupNoIntro_Found(t *testing.T) {
+	// Look up a known entry from the database by scanning for any
+	// Game Boy entry. We cannot hardcode a specific SHA1 because the
+	// database is generated, but we can verify the lookup pathway.
+	loadNoIntro()
+	if nointroErr != nil {
+		t.Fatalf("loadNoIntro: %v", nointroErr)
+	}
+
+	// Find any "gb" entry to use as a test key.
+	var testSHA1 string
+	var testEntry *nointroEntry
+	for sha1, entry := range nointroMap {
+		if entry.Extension == "gb" {
+			testSHA1 = sha1
+			testEntry = entry
+			break
+		}
+	}
+	if testSHA1 == "" {
+		t.Fatal("no Game Boy entry found in nointro database")
+	}
+
+	session := connect(t)
+	defer session.Close()
+
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "lookup_nointro",
+		Arguments: map[string]any{"sha1": testSHA1},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+
+	text := result.Content[0].(*mcp.TextContent).Text
+	var out LookupNoIntroResult
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !out.Found {
+		t.Fatal("expected found=true for known SHA1")
+	}
+	if out.Name != testEntry.Name {
+		t.Errorf("Name = %q, want %q", out.Name, testEntry.Name)
+	}
+	if out.Extension != "gb" {
+		t.Errorf("Extension = %q, want %q", out.Extension, "gb")
+	}
+	if out.System != "Nintendo - Game Boy" {
+		t.Errorf("System = %q, want %q", out.System, "Nintendo - Game Boy")
+	}
+}
+
+// TestLookupNoIntro_NotFound verifies that an unknown SHA1 returns
+// found=false with no name or system fields.
+func TestLookupNoIntro_NotFound(t *testing.T) {
+	session := connect(t)
+	defer session.Close()
+
+	result, err := session.CallTool(context.Background(), &mcp.CallToolParams{
+		Name:      "lookup_nointro",
+		Arguments: map[string]any{"sha1": "0000000000000000000000000000000000000000"},
+	})
+	if err != nil {
+		t.Fatalf("CallTool: %v", err)
+	}
+
+	text := result.Content[0].(*mcp.TextContent).Text
+	var out LookupNoIntroResult
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if out.Found {
+		t.Error("expected found=false for unknown SHA1")
+	}
+	if out.Name != "" {
+		t.Errorf("Name = %q, want empty", out.Name)
 	}
 }

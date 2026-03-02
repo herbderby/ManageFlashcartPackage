@@ -17,7 +17,7 @@ import (
 func newServer() *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "flashcart-tools",
-		Version: "0.2.5",
+		Version: "0.3.0",
 	}, nil)
 
 	// Prompts: identification, domain knowledge, and step-by-step
@@ -144,6 +144,18 @@ func newServer() *mcp.Server {
 		Name:        "read_bytes",
 		Description: "Read N bytes at a byte offset from a file. Returns hex and ASCII representations.",
 	}, handleReadBytes)
+
+	// Hash tool.
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "compute_sha1",
+		Description: "Compute the SHA1 hash of a file.",
+	}, handleComputeSHA1)
+
+	// No-Intro database lookup tool.
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "lookup_nointro",
+		Description: "Look up a ROM's No-Intro canonical name and console system from its SHA1 hash.",
+	}, handleLookupNoIntro)
 
 	// Network tools.
 	mcp.AddTool(server, &mcp.Tool{

@@ -25,6 +25,9 @@ filesystem.go           # list_directory, create_directory, move_file,
                         #   copy_file (recursive), delete_file, file_exists
 pathutil.go             # resolvedMkdirAll (firmlink-safe mkdir)
 bytes.go                # read_bytes tool
+hash.go                 # compute_sha1 tool
+nointro.go              # lookup_nointro tool, embedded No-Intro database
+nointro.json.gz         # Embedded DB: SHA1 -> No-Intro name (~21K entries)
 textfile.go             # read_file, write_file tools
 network.go              # download_file, fetch_url tools
 archive.go              # extract_archive tool (7z + zip)
@@ -35,6 +38,8 @@ models.go               # Flashcart model registry and lookup
 skill.go                # All 9 prompts (identify, knowledge, workflows, manual)
 mcp_test.go             # In-process MCP API tests
 Makefile                # Build and pack targets
+tools/
+  gen_nointro.go        # Generator: merges NoIntro.db + Myrient DATs
 ext/
   manifest.json         # MCPB manifest (dxt_version 0.1)
   server/
@@ -92,5 +97,11 @@ Ace3DS+ references replaced with parameterized prompts.
 `flashcart_identify` prompt added for photo-based cart ID.
 Models: `models.go`, 18 tools + 9 prompts.
 
-Next: reinstall .mcpb, test identification + parameterized
-setup in Claude Desktop.
+Phase 2.2 (complete): Non-NDS box art SHA1 lookup. Embedded
+No-Intro database (~21K entries) for hash-based ROM
+identification. `compute_sha1` and `lookup_nointro` tools.
+Box art prompts rewritten to hash first, filename fallback.
+20 tools + 9 prompts.
+
+Next: reinstall .mcpb, test SHA1-based box art lookup with
+renamed ROMs in Claude Desktop.

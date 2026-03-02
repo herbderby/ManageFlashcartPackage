@@ -2,9 +2,10 @@ BINARY = ext/server/flashcart-tools
 MCPB = flashcart-tools.mcpb
 LDFLAGS = -s -w
 SOURCES = main.go volumes.go filesystem.go bytes.go network.go \
-          archive.go image.go json_tools.go skill.go go.mod go.sum
+          archive.go image.go json_tools.go skill.go hash.go \
+          nointro.go nointro.json.gz go.mod go.sum
 
-.PHONY: build pack clean vet test
+.PHONY: build pack clean vet test gen-nointro
 
 build: $(BINARY)
 
@@ -19,6 +20,9 @@ vet:
 
 test:
 	go test ./...
+
+gen-nointro:
+	go run ./tools
 
 clean:
 	rm -f $(BINARY) $(MCPB)

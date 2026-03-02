@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "flashcart-tools",
   "display_name": "Flashcart Tools",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "description": "Manage Nintendo DS flashcart SD cards",
   "author": {
     "name": "Herb Derby",
@@ -30,6 +30,8 @@
     { "name": "delete_file", "description": "Delete a single file (not recursive)" },
     { "name": "file_exists", "description": "Check whether a path exists" },
     { "name": "read_bytes", "description": "Read N bytes at a byte offset from a file" },
+    { "name": "compute_sha1", "description": "Compute the SHA1 hash of a file" },
+    { "name": "lookup_nointro", "description": "Look up a ROM's No-Intro canonical name from its SHA1 hash" },
     { "name": "download_file", "description": "Download a URL to a local file path" },
     { "name": "fetch_url", "description": "Fetch a URL and return the response body as text" },
     { "name": "extract_archive", "description": "Extract a .7z or .zip archive to a directory" },
