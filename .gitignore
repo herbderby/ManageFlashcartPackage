@@ -1,4 +1,4 @@
-# Binaries (root only; HelloSDCard/bin/ is a distributable plugin artifact)
+# Binaries (root only; ext/server/ is the distributable plugin artifact)
 /bin/
 *.exe
 *.exe~
@@ -25,6 +25,10 @@ go.work.sum
 
 # Build artifacts
 dist/
+*.mcpb
+
+# Session handoff
+NEXT.md
 
 # Commit message scratch file
 commit_message
