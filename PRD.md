@@ -12,47 +12,213 @@ headers to find title IDs, and resizing images.
 
 ## Product Vision
 
-A single installable Cowork plugin that gives Claude the tools and knowledge
+An MCPB desktop extension that gives Claude the tools and domain knowledge
 to prepare and maintain a flashcart SD card on the user's behalf. The user
-installs the plugin, plugs in their SD card, opens a Cowork session, and
-Claude handles the rest: installing firmware, organizing ROMs, fetching box
-art, and validating the card layout.
+installs the `.mcpb` in Claude Desktop, plugs in their SD card, opens a
+session, and Claude handles the rest: installing firmware, organizing ROMs,
+fetching box art, and validating the card layout.
 
-## Target Firmware: TWiLight Menu++
+## Target Firmware: Wood R4 + TWiLight Menu++
+
+The SD card runs a dual-layer firmware stack. The base layer is the
+**Wood R4 1.62 kernel**, which provides the flashcart-specific boot
+mechanism and NDS game loading. The upper layer is **TWiLight Menu++**,
+which replaces the Wood R4 file browser with a modern menu system that
+supports box art, emulators, and homebrew.
+
+This dual-layer architecture was validated in a real-world setup session
+documented in `research/flashcart-setup-report.md`.
+
+### Wood R4 1.62 Kernel (Base Layer)
+
+The Wood R4 kernel is the base firmware for Ace3DS+, R4iLS, and many R4
+clone flashcarts. It provides the DLDI driver and NDS game loader that
+TWiLight delegates to when running NDS games in "Kernel" mode.
+
+**Download source:** DS-Homebrew Flashcard Archive
+
+```
+https://archive.flashcarts.net/Ace3DS+_R4iLS/Ace3DS+_R4iLS_Wood_R4_1.62.zip
+```
+
+This URL redirects through a CDN that can fail with truncated responses.
+See "Download Reliability" below.
+
+**Kernel contents:**
+
+- `_DSMENU.DAT` (427 KB) -- boot file for Ace3DS+ variant
+- `_DS_MENU.DAT` (427 KB) -- boot file for R4iLS variant
+- `__rpg/` -- kernel data directory:
+  - `globalsettings.ini` -- global settings (see macOS fix below)
+  - `savesize.bin` -- save size database
+  - `game.dldi` -- DLDI driver
+  - `backlight.ini` -- backlight settings
+  - `fonts/` -- PCF font files
+  - `ui/ACE/` -- UI theme (BMP images)
+  - `language/` -- language files
+
+**Post-install fix:** The default `__rpg/globalsettings.ini` ships with
+`showHiddenFiles = 1`. On macOS, this causes AppleDouble `._*` files to
+appear in the game menu. Must be changed to `showHiddenFiles = 0`.
+
+### TWiLight Menu++ (Upper Layer)
 
 TWiLight Menu++ is the actively maintained, open-source menu system for DS
-flashcarts. It supports NDS games natively, includes emulators for GBA, SNES,
-GB, GBC, and NES, and displays box art in its menu. Releases are published on
-GitHub at [DS-Homebrew/TWiLightMenu](https://github.com/DS-Homebrew/TWiLightMenu/releases).
+flashcarts, developed by Rocket Robz and the DS-Homebrew community. On a
+flashcart, it replaces the Wood R4 file browser as the primary interface
+and adds support for launching emulators, displaying box art, and running
+homebrew. Releases are published on GitHub at
+[DS-Homebrew/TWiLightMenu](https://github.com/DS-Homebrew/TWiLightMenu/releases).
 
-### SD Card Directory Structure
+**Downloads required (from GitHub releases `latest`):**
+
+1. `TWiLightMenu-Flashcard.7z` (~40.8 MB) -- main flashcard distribution
+2. `AddOn-VirtualConsole.7z` (~3.7 MB) -- emulator binaries for retro
+   consoles
+
+**Archive structure for Ace3DS+:**
+
+The flashcard .7z archive contains files for many different flashcart
+models. For the Ace3DS+, the relevant pieces are:
+
+- **Root files:** `_nds/`, `BOOT.NDS` (213 KB), `roms/` (pre-created
+  subdirectories for 17+ console systems), `snemul.cfg`
+- **`Autoboot/Ace3DS+/`:** Replacement `_DSMENU.dat` and `_DS_MENU.dat`
+  that chainload TWiLight's `BOOT.NDS` instead of Wood R4
+- **`Flashcart Loader/Ace3DS+/`:** `Wfwd.dat` (forwarder binary) and
+  `_wfwd/` (29 files -- a stripped-down Wood R4 kernel for "Kernel"
+  game loading mode, with its own `globalsettings.ini`)
+
+**Installation order** (matters because autoboot overwrites kernel files):
+
+1. Extract archive to `/tmp/`
+2. Copy `_nds/` to SD root (merges with existing)
+3. Copy `BOOT.NDS` to SD root
+4. Copy `roms/` to SD root
+5. Copy `snemul.cfg` to SD root
+6. Copy contents of `Autoboot/Ace3DS+/` to SD root (overwrites
+   `_DSMENU.dat` and `_DS_MENU.dat`)
+7. Copy contents of `Flashcart Loader/Ace3DS+/` to SD root (creates
+   `Wfwd.dat` and `_wfwd/`)
+8. Fix `_wfwd/globalsettings.ini`: set `showHiddenFiles = 0`
+9. Run `clean_dot_files` on entire volume
+10. IMPORTANT: Preserve `_nds/TWiLightMenu/settings.ini` if it exists
+
+**Flashcart model mapping** (archive subdirectory selection):
+
+```
+Ace3DS+ -> Autoboot/Ace3DS+/, Flashcart Loader/Ace3DS+/
+R4iLS   -> Autoboot/R4iLS/ (fallback), Flashcart Loader/R4iLS/
+DSTT    -> (uses YSMenu instead of Wood R4)
+```
+
+### Virtual Console Add-on
+
+The Virtual Console add-on extracts its `_nds/` folder to the SD root,
+merging into `_nds/TWiLightMenu/emulators/`. It provides 22 emulator
+binaries:
+
+| Emulator | System(s) |
+|----------|-----------|
+| StellaDS.nds | Atari 2600 |
+| A5200DS.nds, A5200DSi.nds | Atari 5200 |
+| A7800DS.nds | Atari 7800 |
+| A8DS.nds | Atari XEGS |
+| ColecoDS.nds | ColecoVision |
+| SugarDS.nds | Amstrad CPC |
+| gameyob.nds | Game Boy / Game Boy Color |
+| jEnesisDS.nds, PicoDriveTWL.nds | Sega Genesis / Mega Drive |
+| S8DS.nds | Sega Master System / Game Gear / SG-1000 |
+| nesDS.nds | NES |
+| SNEmulDS.nds (+ DSi/3DS variants) | SNES |
+| NitroGrafx.nds | PC Engine / TurboGrafx-16 |
+| NGPDS.nds | Neo Geo Pocket |
+| NitroSwan.nds | WonderSwan |
+| NINTV-DS.nds | Intellivision |
+| PokeMini.nds | Pokemon Mini |
+
+ROMs for these systems go in `roms/<system>/` subdirectories.
+
+### SD Card Directory Structure (Field-Tested)
 
 ```
 /
-+-- BOOT.NDS                              # TWiLight Menu++ bootloader
++-- _DSMENU.dat                           # TWiLight autoboot (was Wood R4)
++-- _DS_MENU.dat                          # TWiLight autoboot (was Wood R4)
++-- BOOT.NDS                              # TWiLight Menu++ main binary
++-- Wfwd.dat                              # Ace3DS+ flashcart forwarder
++-- snemul.cfg                            # SNES emulator config
++-- __rpg/                                # Wood R4 1.62 kernel (preserved)
+|   +-- globalsettings.ini                #   (showHiddenFiles = 0)
+|   +-- fonts/
+|   +-- language/
+|   +-- ui/ACE/
+|   +-- game.dldi
+|   +-- savesize.bin
+|   +-- backlight.ini
++-- _wfwd/                                # TWiLight's Ace3DS+ kernel loader
 +-- _nds/
+|   +-- nds-bootstrap-release.nds
+|   +-- GBARunner2_*.nds                  # 6 variants
+|   +-- colorLut/
 |   +-- TWiLightMenu/
+|       +-- main.srldr, settings.srldr, ...
+|       +-- emulators/                    # 22 emulator binaries
 |       +-- boxart/                       # Box art PNGs
-|       +-- gamesettings/                 # Per-game settings
+|       +-- gamesettings/
 |       +-- extras/
-|           +-- usrcheat.dat              # Cheat database
-+-- roms/
-|   +-- nds/                              # NDS ROMs (.nds)
-|   +-- gba/                              # GBA ROMs (.gba)
-|   +-- snes/                             # SNES ROMs (.smc, .sfc)
-|   +-- gb/                               # Game Boy ROMs (.gb, .gbc)
-|   +-- nes/                              # NES ROMs (.nes)
-+-- saves/                                # Save files (.sav)
++-- roms/                                 # Pre-created by TWiLight
+|   +-- nds/  gb/  gbc/  gba/  nes/  snes/
+|   +-- gen/  sms/  gg/  pce/
+|   +-- a26/  a52/  a78/  xegs/  col/
+|   +-- int/  ngp/  ws/  dsi/  mini/  sg/
++-- Games/                                # User's ROM directory
 ```
 
 ### Box Art Specifications
 
-- Format: PNG
-- Naming: `{GAMECODE}.png` (preferred) or `{romfilename}.nds.png`
-- Recommended size: 128x115, maximum: 208x143
-- Cached mode limit: 44 KiB per image
-- Location: `_nds/TWiLightMenu/boxart/`
-- Source: GameTDB at `https://art.gametdb.com/ds/coverS/{REGION}/{GAMECODE}.png`
+- **Format:** PNG
+- **Recommended size:** 128x115, maximum: 208x143
+- **Cached mode limit:** 44 KiB per image
+- **Location:** `_nds/TWiLightMenu/boxart/`
+
+**NDS games (GameTDB):**
+
+- **Naming:** `{TID}.png` where TID is the 4-character title ID from the
+  ROM header at offset 0x0C
+- **Source:** `https://art.gametdb.com/ds/coverS/US/{TID}.png`
+- **Fallback regions:** US -> EN -> JA
+- GameTDB `coverS` images are typically already 128x115
+
+**Non-NDS games (libretro thumbnails):**
+
+- **Naming:** `{full_rom_filename}.png` (e.g.,
+  `Galaga - Destination Earth (USA).gbc.png`)
+- **Source:**
+  `https://thumbnails.libretro.com/{LibretroSystem}/Named_Boxarts/{ROMName}.png`
+- Filenames follow No-Intro naming conventions; mismatches return 404
+- Libretro images are often oversized and need resizing to 128x115
+
+**File extension to libretro system name mapping:**
+
+| Extension | Libretro System Name |
+|-----------|---------------------|
+| .gb | Nintendo - Game Boy |
+| .gbc | Nintendo - Game Boy Color |
+| .gba | Nintendo - Game Boy Advance |
+| .nes | Nintendo - Nintendo Entertainment System |
+| .sfc | Nintendo - Super Nintendo Entertainment System |
+| .sms | Sega - Master System - Mark III |
+| .gg | Sega - Game Gear |
+| .gen | Sega - Mega Drive - Genesis |
+| .pce | NEC - PC Engine - TurboGrafx 16 |
+| .a26 | Atari - 2600 |
+| .a52 | Atari - 5200 |
+| .a78 | Atari - 7800 |
+| .col | Coleco - ColecoVision |
+| .int | Mattel - Intellivision |
+| .ngp | SNK - Neo Geo Pocket |
+| .ws | Bandai - WonderSwan |
 
 ### NDS ROM Header (identification fields)
 
@@ -65,6 +231,40 @@ GitHub at [DS-Homebrew/TWiLightMenu](https://github.com/DS-Homebrew/TWiLightMenu
 
 The 4-byte gamecode at offset 0x00C is the title ID used for box art lookups
 and game identification throughout the system.
+
+### macOS FAT32 Hygiene
+
+macOS automatically creates AppleDouble resource fork files (prefixed with
+`._`) on FAT32 volumes because FAT32 does not support extended attributes.
+These files are invisible in Finder but visible to the flashcart menu system,
+causing clutter.
+
+**This was the single most persistent issue during field testing.** Every
+write operation to the SD card generates `._*` files. During initial kernel
+installation alone, 66 AppleDouble files were created.
+
+**Rules:**
+
+- `clean_dot_files` MUST be the final step of every operation that writes
+  to the SD card. Treat it as a post-condition, like flushing a write buffer.
+- Both `__rpg/globalsettings.ini` and `_wfwd/globalsettings.ini` must have
+  `showHiddenFiles = 0`.
+- After running `clean_dot_files`, the operation itself creates 0-2 more
+  `._*` files (from writing the INI fix). Run it once more or accept the
+  residual.
+
+### Download Reliability
+
+Both major downloads (Wood R4 kernel and TWiLight Menu++) involve CDN
+redirects that can fail with truncated responses ("unexpected EOF").
+
+**Mitigations:**
+
+- Maintain a list of mirror URLs for each known download
+- Always extract to `/tmp/` first, then copy to the SD card
+- Verify file integrity after download (check file size against expected
+  size, or check a known magic number at byte offset 0)
+- Cache downloads in `/tmp/` so they survive retries within a session
 
 ## Precondition: Persistent Working Directory
 
@@ -118,77 +318,65 @@ The working directory serves as the user's flashcart home base:
 - **Cowork sessions:** The user opens this folder in Cowork each time.
   Claude reads `config.json` and session history to resume context.
 
-## Delivery: Cowork Plugin with Bundled MCP Server
+## Delivery: MCPB Desktop Extension
 
-### Why a Plugin
+### Why MCPB
 
-Claude Cowork supports plugins -- self-contained packages that bundle skills
-(domain knowledge), slash commands (user workflows), and MCP server
-configurations (tools). A plugin is the natural delivery vehicle because it
-combines all three layers into a single install.
+The Cowork plugin format has a known bug: bundled native binaries are not
+launched (only system PATH commands like `npx` work). The MCPB desktop
+extension format (`@anthropic-ai/mcpb pack`) supports `"type": "binary"`
+and works reliably in Claude Desktop via double-click install.
 
-Cowork's sandboxed VM cannot access the SD card directly (the VM cannot reach
-external volumes). However, MCP servers configured by a plugin run on the
-**host machine**, not inside the VM. An MCP server running on the host has
-full access to mounted SD cards.
+The MCP server runs on the **host machine**, giving it full access to
+mounted SD cards.
 
-### Plugin Architecture
-
-The plugin bundles a compiled Go binary as the MCP server, referenced via
-`${CLAUDE_PLUGIN_ROOT}`:
+### Extension Architecture
 
 ```
-ManageFlashcartPlugin/
-  .claude-plugin/
-    plugin.json                          # Plugin manifest
-  .mcp.json                             # MCP server configuration
-  bin/
-    manage-flashcart                     # Launcher script (detects OS/arch)
-    manage-flashcart.cmd                 # Windows launcher
-    manage-flashcart-darwin-arm64        # macOS Apple Silicon binary
-    manage-flashcart-darwin-amd64        # macOS Intel binary
-    manage-flashcart-windows-amd64.exe   # Windows binary
-  skills/
-    flashcart-management/
-      SKILL.md                           # Domain knowledge and workflow guidance
-  commands/
-    setup-card/
-      SKILL.md                           # /setup-card slash command
-    scan-card/
-      SKILL.md                           # /scan-card slash command
+ext/
+  manifest.json                          # MCPB manifest (dxt_version 0.1)
+  server/
+    flashcart-tools                      # Compiled Go binary (darwin/arm64)
 ```
 
-### .mcp.json
+The manifest declares the binary entry point and MCP server configuration:
 
 ```json
 {
-  "mcpServers": {
-    "flashcart": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/bin/manage-flashcart",
-      "args": ["--serve"],
-      "cwd": "${CLAUDE_PLUGIN_ROOT}"
+  "dxt_version": "0.1",
+  "name": "flashcart-tools",
+  "version": "0.2.2",
+  "server": {
+    "type": "binary",
+    "entry_point": "server/flashcart-tools",
+    "mcp_config": {
+      "command": "${__dirname}/server/flashcart-tools"
     }
   }
 }
 ```
 
-On macOS, the `manage-flashcart` launcher script detects the architecture
-via `uname -m` and execs the correct binary. On Windows, the `.cmd` launcher
-runs the `.exe`.
+### Build and Install
 
-### Installation
+```
+make build    # CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build
+make pack     # zip ext/ into flashcart-tools.mcpb
+```
 
-User installs the plugin from the Cowork plugin directory (one click) or
-uploads it manually. The plugin includes all binaries -- no separate
-downloads, no runtime dependencies, no restarts required beyond what plugin
-installation already entails.
+Install by double-clicking `flashcart-tools.mcpb` in Finder, which opens
+Claude Desktop and registers the MCP server.
 
-### Size Budget
+### Domain Knowledge
 
-Go binaries are typically 5-15 MB each. Three platform binaries total
-roughly 20-40 MB. The Cowork plugin upload limit is 50 MB. This is tight
-but feasible, especially with `go build -ldflags="-s -w"` to strip debug
-info (reduces binary size by ~30%).
+Domain knowledge (TWiLight Menu++ conventions, ROM identification, box art
+workflow, safety rules) is embedded in the binary as a Go string constant
+and served via the `flashcart_knowledge` MCP prompt. This avoids external
+dependencies -- the binary is fully self-contained.
+
+### Size
+
+The stripped binary is ~8 MB; the `.mcpb` ZIP is ~3.4 MB. Single platform
+(darwin/arm64) for now; cross-compilation is trivial to add later.
 
 ## Design Philosophy: Low-Level Tools, Smart Agent
 
@@ -214,133 +402,164 @@ This split has three advantages:
 The server exposes low-level tools. Claude composes them using domain
 knowledge from the skill files.
 
-**`list_volumes`:**
-List mounted removable volumes with mount point, filesystem type, total
-size, and free space.
+**Volume:**
 
-**`list_directory`:**
-List files and subdirectories at a path with sizes and modification times.
+- **`list_volumes`:** List mounted removable volumes with mount point,
+  filesystem type, total size, and free space.
 
-**`create_directory`:**
-Create a directory (and parents) at a path.
+**Filesystem:**
 
-**`move_file`:**
-Move or rename a file or directory.
+- **`list_directory`:** List files and subdirectories at a path with sizes
+  and modification times.
+- **`create_directory`:** Create a directory (and parents) at a path.
+  Uses firmlink-safe mkdir for FAT32 volumes.
+- **`move_file`:** Move or rename a file or directory.
+- **`copy_file`:** Copy a file or directory. Supports recursive directory
+  copying for installing firmware trees.
+- **`delete_file`:** Delete a single file (not recursive).
+- **`file_exists`:** Check whether a path exists and whether it is a file
+  or directory.
 
-**`copy_file`:**
-Copy a file from one path to another.
+**Text and binary:**
 
-**`delete_file`:**
-Delete a single file (not recursive).
+- **`read_file`:** Read a text file and return its contents. Used for
+  reading INI configuration files on the SD card.
+- **`write_file`:** Write text content to a file, creating parent
+  directories as needed. Used for modifying INI files.
+- **`read_bytes`:** Read N bytes at a byte offset from a file. Returns
+  hex and ASCII. Claude uses this to parse ROM headers.
+- **`read_json`:** Read and parse a JSON file.
+- **`write_json`:** Write a JSON object to a file with indentation.
 
-**`file_exists`:**
-Check whether a path exists and whether it is a file or directory.
+**Network:**
 
-**`read_bytes`:**
-Read N bytes at a byte offset from a file. Returns hex and ASCII. Claude
-uses this to parse ROM headers.
+- **`download_file`:** Download a URL to a local file path. Follows
+  redirects. CDN failures are possible (see Download Reliability).
+- **`fetch_url`:** Fetch a URL and return the body as text (truncated at
+  1 MiB). For HTML directory listings, API responses, etc.
 
-**`download_file`:**
-Download a URL to a local file path. Reports progress for large files.
-Supports resume.
+**Archive:**
 
-**`fetch_url`:**
-Fetch a URL and return the body as text. For HTML directory listings, API
-responses, etc.
+- **`extract_archive`:** Extract a .7z or .zip archive to a directory.
+  Uses firmlink-safe mkdir for FAT32 volumes.
 
-**`extract_archive`:**
-Extract a .7z or .zip archive to a directory.
+**Image:**
 
-**`resize_image`:**
-Resize a PNG to given dimensions and save. Reports output file size (for
-the 44 KiB cache limit).
+- **`resize_image`:** Resize a PNG to given dimensions using high-quality
+  interpolation. Does not preserve aspect ratio (stretches to fit).
+- **`image_info`:** Return dimensions and file size of an image.
 
-**`image_info`:**
-Return dimensions and file size of an image.
+**macOS hygiene:**
 
-**`read_json`:**
-Read and parse a JSON file.
-
-**`write_json`:**
-Write a JSON object to a file.
+- **`clean_dot_files`:** Remove AppleDouble `._*` resource fork files
+  from a directory tree recursively. MUST be called after every batch of
+  writes to a FAT32 volume.
 
 Each tool returns structured JSON. Each tool does one thing.
+18 tools + 1 prompt total.
 
-## Plugin Skills (Domain Knowledge)
+## Domain Knowledge (Embedded Prompt)
 
-The skills teach Claude everything it needs to compose the primitives into
-flashcart workflows. The Go binary knows nothing about flashcarts.
+The domain knowledge teaches Claude everything it needs to compose the
+primitives into flashcart workflows. It is embedded in the Go binary as
+a string constant and served via the `flashcart_knowledge` MCP prompt.
 
-### Skill: flashcart-management (SKILL.md)
+### flashcart_knowledge prompt
 
-This is the core skill, always active when the plugin is enabled. It
-teaches Claude:
+This is the core knowledge, returned when Claude requests the prompt. It
+covers:
 
-**TWiLight Menu++ directory conventions:**
-- Exact directory tree expected on the card (the structure from the
-  "SD Card Directory Structure" section above)
+**Dual-layer firmware architecture:**
+- Wood R4 1.62 as base layer (boot files, DLDI driver, NDS game loading)
+- TWiLight Menu++ as upper layer (menu system, emulators, box art)
+- How autoboot files chainload TWiLight from the Wood R4 boot sequence
+- Flashcart model mapping (which archive subdirectories to use)
+
+**SD card directory conventions:**
+- Field-tested directory tree with all system directories
+- Wood R4 directories (`__rpg/`, `_wfwd/`) vs TWiLight directories
+  (`_nds/`, `roms/`)
 - Which files are system files vs. user files
-- Where ROMs go by system type (nds, gba, snes, gb, nes)
-- Where saves, box art, cheat databases, and settings live
+- Where ROMs go by system type (17+ systems with emulators)
 
 **ROM identification:**
-- How to use `read_bytes` at offset 0x00C (4 bytes) to extract the
-  gamecode from an NDS ROM header
-- How to use `read_bytes` at offset 0x000 (12 bytes) to extract the
-  game title
-- The gamecode format: 4 uppercase ASCII characters
+- NDS: `read_bytes` at offset 0x0C (4 bytes) for title ID
+- Non-NDS: use the ROM filename directly (No-Intro naming convention)
+- File extension determines the console system
 - Homebrew ROMs have gamecode `####` or all zeros
 
-**Box art workflow:**
-- Gamecode maps to box art URL: `https://art.gametdb.com/ds/coverS/{REGION}/{GAMECODE}.png`
-- Default region is US; fall back to EN, then JA
-- Download to cache first (`working_dir/cache/boxart/`), then copy to card
-- Check dimensions with `image_info`; resize with `resize_image` if needed
-- Naming convention: `{GAMECODE}.png` in `_nds/TWiLightMenu/boxart/`
+**Box art workflow (multi-source):**
+- NDS: GameTDB at `https://art.gametdb.com/ds/coverS/US/{TID}.png`
+- Non-NDS: libretro thumbnails at
+  `https://thumbnails.libretro.com/{System}/Named_Boxarts/{Name}.png`
+- Complete file extension to libretro system name mapping
+- NDS box art naming: `{TID}.png`
+- Non-NDS box art naming: `{full_rom_filename}.png`
+- Download, resize to 128x115 if needed, save to
+  `_nds/TWiLightMenu/boxart/`
 
-**Firmware installation:**
-- Latest release URL: `https://github.com/DS-Homebrew/TWiLightMenu/releases/latest`
-- Download `TWiLightMenu-Flashcard.7z` to `working_dir/cache/twilight_menu/`
-- Extract with `extract_archive`
-- Copy `BOOT.NDS` and `_nds/` to card root using `copy_file`
-- Preserve user settings: do not overwrite `_nds/TWiLightMenu/settings.ini`
-  if it already exists
+**Firmware installation (three-phase):**
+1. Wood R4 kernel: download, extract, configure `showHiddenFiles = 0`
+2. TWiLight Menu++: download, extract, copy model-specific autoboot and
+   loader files, configure `_wfwd/globalsettings.ini`
+3. Virtual Console: download, extract emulators to `_nds/TWiLightMenu/emulators/`
+
+**macOS FAT32 hygiene:**
+- `clean_dot_files` as mandatory post-condition for all write operations
+- INI configuration patching for `showHiddenFiles`
+- Why this matters (AppleDouble resource fork files)
+
+**Download reliability:**
+- CDN redirect failures, mirror fallback
+- Extract to `/tmp/` first, then copy to card
+- File integrity verification
 
 **Working directory management:**
-- On first session, create the working directory structure
-- Back up saves before modifying a card: copy `saves/*.sav` from card to
-  `working_dir/backups/saves/`
-- Cache downloads to avoid re-fetching
+- Persistent folder on user's computer for backups, staging, cache
+- Structure and first-session setup
 
 **Safety rules:**
-- Always confirm before deleting or overwriting files on the card
-- Never delete ROMs without explicit user approval
 - Back up saves before any card modification
-- Scan the card before making changes so the user sees current state first
+- Confirm before deleting or overwriting
+- Scan card before making changes
+- `clean_dot_files` after every write batch
 
-### Slash Command: /setup-card
+### Skill Architecture (Field-Tested)
 
-Guided workflow that composes the primitives:
-1. `list_volumes` to find the card
-2. `list_directory` to assess current state
-3. Confirm plan with user
-4. Download and install TWiLight Menu++ (download_file, extract_archive,
-   copy_file, create_directory)
-5. Create ROM directories (create_directory)
-6. Scan for existing ROMs (list_directory, read_bytes to identify each)
-7. Organize ROMs into correct folders (move_file)
-8. Fetch box art (download_file, resize_image, copy_file)
-9. Report final state
+The following composable sub-tasks were validated during the field test
+session documented in `research/flashcart-setup-report.md`. Each can be
+invoked independently or chained together. Every sub-task that writes to
+the SD card MUST end with `clean_dot_files`.
 
-### Slash Command: /scan-card
+**`flashcart-init`:**
+Format verification, Wood R4 kernel download and installation,
+`showHiddenFiles` fix, `Games/` directory creation. Input: flashcart
+model. Output: bootable SD card with base kernel.
 
-Quick assessment that composes the primitives:
-1. `list_volumes` to find the card
-2. `list_directory` on card root and key subdirectories
-3. `read_bytes` on each ROM to extract title and gamecode
-4. `list_directory` on boxart folder to check coverage
-5. `file_exists` for `usrcheat.dat`, `BOOT.NDS`, `settings.ini`
-6. Report to user
+**`flashcart-twilight-install`:**
+Download and install TWiLight Menu++ with appropriate autoboot and
+flashcart loader files for the detected model. Fix
+`_wfwd/globalsettings.ini`. Input: flashcart model (or auto-detect
+from existing kernel files). Output: TWiLight overlaid on base kernel.
+
+**`flashcart-emulators`:**
+Download and install the Virtual Console add-on. Merges emulator
+binaries into `_nds/TWiLightMenu/emulators/`.
+
+**`flashcart-boxart`:**
+Scan all ROM files on the card, determine system and identifier for
+each, download cover art from the appropriate source (GameTDB for NDS,
+libretro for everything else), resize to 128x115, save with the
+correct naming convention. Report any games where art could not be
+found.
+
+**`flashcart-add-game`:**
+Copy a ROM file to the appropriate directory, automatically download
+and install box art for it.
+
+**`flashcart-cleanup`:**
+Run `clean_dot_files` on the entire volume. Verify directory structure
+integrity. Report disk usage.
 
 ## Implementation Language and Build
 
@@ -379,235 +598,181 @@ volumes:
 - **Formatting the SD card.** That is handled by the Nintendo DS Flashcart
   Tool, a separate project (macOS only).
 - **Running on the DS itself.** This tool runs on the user's computer.
-- **Supporting non-TWiLight Menu++ firmware.** TWiLight Menu++ only for now.
 - **ROM dumping or ripping.** The user provides ROMs or points to
   repositories.
-- **Linux support in Phase 1.** Can be added later trivially (Go
+- **Linux support in Phase 2.** Can be added later trivially (Go
   cross-compiles to Linux with one command).
+- **Flashcarts beyond Ace3DS+/R4iLS family.** Other carts (DSTT, etc.)
+  use different kernels (YSMenu). Support can be added later.
 
 ## User Experience Walkthrough
 
 ```
-User installs the ManageFlashcart plugin from the Cowork plugin
-directory (one click). Inserts their SD card. Opens a Cowork session.
+User installs flashcart-tools.mcpb in Claude Desktop (double-click).
+Inserts their FAT32-formatted SD card. Opens a session.
 
-User: I want to set up my DS flashcart SD card.
+User: I want to set up my Ace3DS+ flashcart SD card.
 
 Claude: Let me check for SD cards...
 
 I found one removable volume:
 
-  SDCARD (32 GB FAT32, 29.1 GB free)
-  Mounted at /Volumes/SDCARD
-  Status: Empty -- no TWiLight Menu++ detected.
+  NDS (128 GB FAT32, 119.2 GB free)
+  Mounted at /Volumes/NDS
+  Status: Empty -- no kernel detected.
 
-Would you like me to set this card up from scratch? I'll install
-TWiLight Menu++, create the ROM folder structure, and install the
-cheat database.
+I'll set this up in three phases:
+1. Install Wood R4 1.62 kernel (base firmware)
+2. Install TWiLight Menu++ (menu system with emulators)
+3. Set up ROM directories and clean up macOS junk files
+
+Shall I proceed?
 
 User: Yes.
 
-Claude: Setting up your card...
+Claude: Phase 1: Installing Wood R4 kernel...
 
-  [x] Downloaded TWiLight Menu++ v27.22.2 from GitHub
-  [x] Extracted and installed BOOT.NDS and _nds/ to card root
-  [x] Created roms/nds/, roms/gba/, roms/snes/, roms/gb/, roms/nes/
-  [x] Created saves/ directory
-  [x] Downloaded and installed usrcheat.dat
+  [x] Downloaded Ace3DS+_R4iLS_Wood_R4_1.62.zip
+  [x] Extracted kernel files to card
+  [x] Fixed showHiddenFiles = 0 in __rpg/globalsettings.ini
+  [x] Created Games/ directory
 
-Your card is ready for games. You can:
-  - Give me a URL to a ROM repository and I'll help you browse it
-  - Copy .nds files to the card yourself and I'll organize them
-    and fetch box art
+Phase 2: Installing TWiLight Menu++...
 
-User: I copied a bunch of nds files to the card.
+  [x] Downloaded TWiLightMenu-Flashcard.7z v27.22.2
+  [x] Downloaded AddOn-VirtualConsole.7z
+  [x] Installed _nds/, BOOT.NDS, roms/ directories
+  [x] Installed Ace3DS+ autoboot files
+  [x] Installed flashcart loader (Wfwd.dat, _wfwd/)
+  [x] Fixed showHiddenFiles = 0 in _wfwd/globalsettings.ini
+  [x] Installed 22 Virtual Console emulators
+
+Phase 3: Cleanup...
+
+  [x] Removed 66 AppleDouble files from volume
+  [x] Verified directory structure
+
+Your card is ready. You can copy ROM files to the Games/
+directory and I'll identify them and fetch box art.
+
+User: I copied some games -- NDS, GBC, and an Atari 7800 ROM.
 
 Claude: Let me scan the card...
 
-I found 47 .nds files in the card root. I read each ROM's header
-and identified them:
+I found 8 ROM files in Games/:
+  5 NDS games (read title IDs from ROM headers)
+  2 GBC games
+  1 Atari 7800 game
 
-  Mario Kart DS (AMCE)
-  New Super Mario Bros. (A2DE)
-  Pokemon Diamond (ADAE)
-  Phoenix Wright: Ace Attorney (ABCE)
-  ... and 43 more.
+I'll fetch box art for each:
+  - NDS: from GameTDB using title IDs
+  - GBC: from libretro thumbnails using filenames
+  - A78: from libretro thumbnails using filename
 
-I'll move them all into roms/nds/ and fetch box art for each from
-GameTDB. Go ahead?
+Go ahead?
 
 User: Yes please.
 
 Claude: Done.
 
-  [x] Moved 47 ROMs to roms/nds/
-  [x] Fetched box art for 45 of 47 games
-  [ ] No box art found for 2 titles:
-      - Homebrew_Menu.nds (homebrew, not in GameTDB)
-      - ROM_Hack_v2.nds (ROM hack, not in GameTDB)
+  [x] Downloaded box art for 5 NDS games from GameTDB (128x115)
+  [x] Downloaded and resized GBC art from libretro (256x251 -> 128x115)
+  [x] Downloaded and resized A78 art from libretro (512x714 -> 128x115)
+  [ ] No art found for Crystal Depths (homebrew, not in any database)
+  [x] Cleaned 9 AppleDouble files from boxart directory
 
-Your card has 47 games with box art. Eject the card, pop it in
-your R4, and try it out.
+7 of 8 games have box art. Eject the card and try it out.
 ```
 
-## Phase 0: Proof of Concept
+## Phase 0: Proof of Concept (Complete)
 
-Before building the full flashcart tool, validate the core architecture with
-a trivial plugin that bundles a compiled Go MCP server binary. This proves
-(or disproves) the end-to-end chain: plugin install, binary discovery,
-MCP server launch, tool execution on the host filesystem.
+Phase 0 validated the end-to-end chain: Go binary compiles, serves MCP
+over stdio, `list_volumes` returns real volume data, and the `.mcpb`
+package installs in Claude Desktop via double-click.
 
-### What to Build
+Key learnings:
+- Cowork plugin format cannot launch bundled binaries (known bug).
+  Pivoted to MCPB desktop extension format.
+- Official Go MCP SDK (`go-sdk` v1.4.0) works well: `mcp.NewServer`,
+  `mcp.AddTool[In, Out]`, `server.Run` with `&mcp.StdioTransport{}`.
+- `jsonschema` struct tags are the description string directly, not
+  `description=...` prefixed.
+- `syscall.Statfs_t.Fstypename` is `[16]int8` on Darwin, needs
+  int8-to-byte conversion.
 
-A plugin called `HelloSDCard` with one MCP tool: `list_volumes`. The tool
-lists mounted volumes on the host machine and returns their names, mount
-points, and free space. No flashcart logic, no ROM parsing -- just proof
-that a bundled Go binary can talk to Cowork through the MCP protocol.
+## Phase 1: Full Tool Surface (Complete)
 
-### Plugin Structure
+All 18 MCP tools and 1 prompt implemented and tested:
+- **Volume:** `list_volumes`
+- **Filesystem:** `list_directory`, `create_directory`, `move_file`,
+  `copy_file` (recursive), `delete_file`, `file_exists`
+- **Text/binary:** `read_file`, `write_file`, `read_bytes`
+- **Network:** `download_file`, `fetch_url`
+- **Archive:** `extract_archive` (7z + zip)
+- **Image:** `resize_image`, `image_info`
+- **JSON:** `read_json`, `write_json`
+- **macOS hygiene:** `clean_dot_files`
+- **Prompt:** `flashcart_knowledge` (embedded domain knowledge)
 
-```
-HelloSDCard/
-  .claude-plugin/
-    plugin.json
-  .mcp.json
-  bin/
-    hello-sdcard                     # Launcher script (macOS)
-    hello-sdcard-darwin-arm64        # Compiled Go binary
-  skills/
-    hello/
-      SKILL.md                       # Minimal: "Use list_volumes to show drives"
-```
+Key fixes during Phase 1:
+- FAT32 firmlink-safe `mkdir` (`resolvedMkdirAll` in `pathutil.go`)
+- Recursive `copy_file` for directory trees
+- `read_file` / `write_file` for INI configuration editing
+- `clean_dot_files` for AppleDouble removal
 
-### plugin.json
+## Phase 2: Field Test (Complete)
 
-```json
-{
-  "name": "HelloSDCard",
-  "version": "0.1.0",
-  "description": "Proof of concept: list mounted volumes from a bundled Go MCP server"
-}
-```
+Full end-to-end setup of an Ace3DS+ flashcart SD card using Cowork with
+the Flashcart Tools MCP server. Documented in
+`research/flashcart-setup-report.md`.
 
-### .mcp.json
+Validated:
+- Wood R4 1.62 kernel installation (download, extract, configure)
+- TWiLight Menu++ v27.22.2 installation with Ace3DS+ autoboot
+- Virtual Console add-on (22 emulators)
+- Box art for NDS (GameTDB) and non-NDS (libretro thumbnails)
+- macOS FAT32 hygiene (66 AppleDouble files cleaned in first pass alone)
+- Download reliability (CDN failures, mirror fallback)
 
-```json
-{
-  "mcpServers": {
-    "hello-sdcard": {
-      "command": "${CLAUDE_PLUGIN_ROOT}/bin/hello-sdcard",
-      "cwd": "${CLAUDE_PLUGIN_ROOT}"
-    }
-  }
-}
-```
-
-### Go MCP Server (hello-sdcard)
-
-A single `main.go` (~100 lines) that:
-1. Reads JSON-RPC requests from stdin
-2. Responds to `tools/list` with one tool: `list_volumes`
-3. Responds to `tools/call` for `list_volumes` by enumerating `/Volumes/`
-   (macOS) and returning JSON with volume name, mount point, filesystem
-   type, and free space
-4. Handles the MCP `initialize` handshake
-
-### Launcher Script (bin/hello-sdcard)
-
-```sh
-#!/bin/sh
-ARCH=$(uname -m)
-case "$ARCH" in
-  arm64)  exec "${0}-darwin-arm64" "$@" ;;
-  x86_64) exec "${0}-darwin-amd64" "$@" ;;
-  *)      echo "Unsupported architecture: $ARCH" >&2; exit 1 ;;
-esac
-```
-
-### Build and Test Steps
-
-1. Write `main.go` with MCP stdio transport and `list_volumes` tool
-2. Build: `GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o bin/hello-sdcard-darwin-arm64`
-3. Create the plugin directory structure with launcher script and skill
-4. Test locally first:
-   - Run the binary directly and send MCP JSON-RPC on stdin to verify
-     it responds correctly
-   - Confirm `list_volumes` returns real volume data
-5. Install in Cowork:
-   - Upload the plugin directory as a zip, or use `--plugin-dir` for
-     development mode
-   - Open a Cowork session with the plugin enabled
-   - Ask Claude: "What drives are connected to my computer?"
-   - Verify Claude calls `list_volumes` and reports the mounted volumes
-
-### What This Validates
-
-| Risk                                           | Validated by                              |
-|------------------------------------------------|-------------------------------------------|
-| Can a plugin bundle a native binary?           | Plugin installs without error             |
-| Are execute permissions preserved?             | Binary launches successfully              |
-| Does `${CLAUDE_PLUGIN_ROOT}` resolve correctly?| MCP server starts from the right path     |
-| Does the launcher script work?                 | Correct arch binary is selected and exec'd|
-| Can MCP tools access the host filesystem?      | `list_volumes` returns real `/Volumes/` data |
-| Can Claude call tools from a bundled binary?   | Claude uses `list_volumes` in conversation|
-| Is an SD card visible to the MCP server?       | Insert SD card, verify it appears in results |
-
-### What This Does NOT Validate
-
-- Windows support (macOS-only for PoC)
-- Plugin size limits (PoC binary will be ~5 MB, well under 50 MB)
-- Go MCP SDK maturity (PoC hand-rolls the protocol)
-- 7z extraction, image resizing, HTTP downloads
-
-### Success Criteria
-
-The PoC is successful if: a user installs the plugin in Cowork, asks
-"what volumes are mounted?", and Claude calls the bundled Go binary's
-`list_volumes` tool and correctly reports the mounted drives, including
-an inserted SD card.
-
-If this works, every assumption in the full plugin architecture is proven.
-If it fails, we learn exactly which part of the chain breaks and can
-adjust before investing in the full implementation.
+Key learnings:
+- `clean_dot_files` must be called after EVERY batch of writes to FAT32
+- TWiLight archive contains model-specific subdirectories; must select
+  the right ones for the flashcart model
+- `_wfwd/globalsettings.ini` (TWiLight's kernel loader) also needs the
+  `showHiddenFiles = 0` fix
+- Non-NDS box art uses the full ROM filename, not a header-derived ID
+- libretro thumbnail filenames follow No-Intro conventions exactly
 
 ## Open Questions
 
-1. **7z extraction.** TWiLight Menu++ releases are distributed as `.7z`
-   archives. The Go library `github.com/bodgit/sevenzip` handles this
-   in pure Go (no CGo), but needs validation that it works with the
-   specific archives TWiLight Menu++ publishes.
+1. **GameTDB rate limiting.** No explicit rate limits documented, but
+   a card with 500+ ROMs would generate many requests. Should implement
+   reasonable delays and local caching.
 
-2. **Go MCP SDK.** Is there a mature Go MCP SDK, or should we implement
-   the JSON-RPC stdio transport directly? The protocol is simple enough
-   to hand-roll.
+2. **Cross-platform.** Currently darwin/arm64 only. Adding more
+   platforms is trivial with Go cross-compilation but requires testing
+   volume detection on each OS.
 
-3. **GameTDB rate limiting.** Does GameTDB have rate limits or terms of
-   service for programmatic cover downloads? A card with 500+ ROMs would
-   generate many requests.
+3. **Aspect ratio in resize.** `resize_image` stretches to fit the target
+   dimensions. Tall cover art (e.g., Atari 7800 at ~1:1.4) gets
+   noticeably squished at 128x115. Could add letterboxing for extreme
+   aspect ratios.
 
-4. **Non-NDS ROM identification.** GBA, SNES, GB, and NES ROMs have their
-   own header formats for title extraction. Should Phase 1 support these,
-   or focus on NDS only?
-
-5. **Plugin size limit.** Three Go binaries may approach the 50 MB Cowork
-   upload limit. If too large, options include: ship macOS-only initially,
-   use UPX compression, or distribute via git-based marketplace (no size
-   limit) instead of web upload.
-
-6. **Plugin launcher scripts.** The `manage-flashcart` shell script and
-   `.cmd` file need to detect OS/architecture and exec the right binary.
-   Need to verify this works when launched by the MCP server spawner in
-   Claude Desktop.
+4. **Other flashcart models.** DSTT uses YSMenu instead of Wood R4.
+   The flashcart model mapping needs expansion as more carts are tested.
 
 ## References
 
-- [TWiLight Menu++ Flashcard Installation](https://wiki.ds-homebrew.com/twilightmenu/installing-flashcard)
-- [TWiLight Menu++ Box Art Guide](https://wiki.ds-homebrew.com/twilightmenu/how-to-get-box-art)
+- [DS-Homebrew Flashcard Archive](https://github.com/DS-Homebrew/flashcard-archive)
 - [TWiLight Menu++ GitHub Releases](https://github.com/DS-Homebrew/TWiLightMenu/releases)
-- [GameTDB DS Downloads](https://www.gametdb.com/DS/Downloads)
+- [TWiLight Menu++ Flashcard Installation](https://wiki.ds-homebrew.com/twilightmenu/installing-flashcard)
+- [TWiLight Menu++ Add-ons](https://wiki.ds-homebrew.com/twilightmenu/installing-addons)
+- [TWiLight Menu++ Box Art Guide](https://wiki.ds-homebrew.com/twilightmenu/how-to-get-box-art)
+- [GameTDB DS Cover Art](https://art.gametdb.com/ds/coverS/US/)
+- [Libretro Thumbnail Database](https://thumbnails.libretro.com/)
+- [Flashcart Guides -- Ace3DS+](https://flashcart-guides.github.io/wiki/cart-guides/ace3ds/)
+- [Ace3DS+ Wood Kernel NAND Fix](https://gbatemp.net/threads/wood-r4-1-62-kernel-fix-for-ace3ds-r4ils.639921/)
 - [GBATEK DS Cartridge Header](https://problemkaputt.de/gbatek-ds-cartridge-header.htm)
 - [NDS ROM Format](https://github.com/Roughsketch/mdnds/wiki/NDS-Format)
-- [Cowork Plugins](https://claude.com/blog/cowork-plugins)
-- [Plugin Reference](https://code.claude.com/docs/en/plugins-reference)
-- [Plugin Marketplaces](https://code.claude.com/docs/en/plugin-marketplaces)
-- [Get Started with Cowork](https://support.claude.com/en/articles/13345190-get-started-with-cowork)
+- [GameTDB DS Downloads](https://www.gametdb.com/DS/Downloads)
+- [Go MCP SDK](https://github.com/modelcontextprotocol/go-sdk)
