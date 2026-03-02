@@ -12,17 +12,61 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func main() {
+// newServer constructs and configures the MCP server with all tools
+// and prompts registered. It is called by main and by tests.
+func newServer() *mcp.Server {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "flashcart-tools",
-		Version: "0.2.4",
+		Version: "0.2.5",
 	}, nil)
 
-	// Prompt: domain knowledge for flashcart workflows.
+	// Prompts: domain knowledge and step-by-step workflow recipes.
 	server.AddPrompt(&mcp.Prompt{
 		Name:        "flashcart_knowledge",
 		Description: "Domain knowledge for managing DS flashcart SD cards",
 	}, handleFlashcartKnowledge)
+
+	server.AddPrompt(&mcp.Prompt{
+		Name:        "flashcart_init",
+		Description: "Step-by-step Wood R4 kernel installation for Ace3DS+",
+	}, handleFlashcartInit)
+
+	server.AddPrompt(&mcp.Prompt{
+		Name:        "flashcart_twilight_install",
+		Description: "Step-by-step TWiLight Menu++ installation for Ace3DS+",
+	}, handleFlashcartTwilight)
+
+	server.AddPrompt(&mcp.Prompt{
+		Name:        "flashcart_emulators",
+		Description: "Step-by-step Virtual Console emulator add-on installation",
+	}, handleFlashcartEmulators)
+
+	server.AddPrompt(&mcp.Prompt{
+		Name:        "flashcart_boxart",
+		Description: "Scan all ROMs and download box art for each",
+	}, handleFlashcartBoxart)
+
+	server.AddPrompt(&mcp.Prompt{
+		Name:        "flashcart_add_game",
+		Description: "Add a single ROM to the flashcart with box art",
+		Arguments: []*mcp.PromptArgument{
+			{
+				Name:        "source_path",
+				Description: "Absolute path to the ROM file to add",
+				Required:    true,
+			},
+		},
+	}, handleFlashcartAddGame)
+
+	server.AddPrompt(&mcp.Prompt{
+		Name:        "flashcart_cleanup",
+		Description: "Clean AppleDouble files and verify card structure",
+	}, handleFlashcartCleanup)
+
+	server.AddPrompt(&mcp.Prompt{
+		Name:        "flashcart_manual",
+		Description: "User manual: getting started, workflows, and troubleshooting",
+	}, handleFlashcartManual)
 
 	// Volume tools.
 	mcp.AddTool(server, &mcp.Tool{
@@ -123,6 +167,11 @@ func main() {
 		Description: "Remove AppleDouble ._* resource fork files from a directory tree. Run this after writing files to a FAT32 volume on macOS.",
 	}, handleCleanDotFiles)
 
+	return server
+}
+
+func main() {
+	server := newServer()
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Fatalf("server exited: %v", err)
 	}

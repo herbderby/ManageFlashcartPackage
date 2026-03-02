@@ -12,6 +12,7 @@ maintain cards running TWiLight Menu++ or Wood R4.
 - **Language:** Go
 - **Module:** `github.com/herbderby/ManageFlashcartPackage`
 - **Build:** `make build` (strips debug info, cross-compiles)
+- **Test:** `go test ./...` (in-process MCP API tests)
 - **Pack:** `make pack` (creates `flashcart-tools.mcpb`)
 - **MCP SDK:** `github.com/modelcontextprotocol/go-sdk` v1.4.0
 
@@ -30,7 +31,8 @@ archive.go              # extract_archive tool (7z + zip)
 image.go                # resize_image, image_info tools
 json_tools.go           # read_json, write_json tools
 dotclean.go             # clean_dot_files tool (AppleDouble removal)
-skill.go                # flashcart_knowledge prompt (embedded)
+skill.go                # All 8 prompts (knowledge, workflows, manual)
+mcp_test.go             # In-process MCP API tests
 Makefile                # Build and pack targets
 ext/
   manifest.json         # MCPB manifest (dxt_version 0.1)

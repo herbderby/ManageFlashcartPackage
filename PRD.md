@@ -456,7 +456,7 @@ knowledge from the skill files.
   writes to a FAT32 volume.
 
 Each tool returns structured JSON. Each tool does one thing.
-18 tools + 1 prompt total.
+18 tools + 8 prompts total.
 
 ## Domain Knowledge (Embedded Prompt)
 
@@ -760,6 +760,15 @@ Key learnings:
 
 4. **Other flashcart models.** DSTT uses YSMenu instead of Wood R4.
    The flashcart model mapping needs expansion as more carts are tested.
+
+## User Manual
+
+The canonical user-facing manual lives in
+[`MANUAL.md`](MANUAL.md) at the repo root. The `flashcart_manual`
+MCP prompt fetches it from GitHub at runtime so edits take effect
+without rebuilding the binary. The embedded constant in `skill.go`
+serves as a fallback when the fetch fails (offline, rate-limited,
+etc.).
 
 ## References
 

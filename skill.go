@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"io"
+	"strings"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -223,6 +225,671 @@ func handleFlashcartKnowledge(
 			{
 				Role:    "user",
 				Content: &mcp.TextContent{Text: flashcartSkill},
+			},
+		},
+	}, nil
+}
+
+// flashcartInitPrompt contains the step-by-step procedure for
+// installing the Wood R4 1.62 kernel on an Ace3DS+ flashcart SD card.
+const flashcartInitPrompt = `# Wood R4 Kernel Installation
+
+Step-by-step procedure for installing the Wood R4 1.62 kernel on an
+Ace3DS+ flashcart SD card. Follow each step in order, calling the
+named tool at each step.
+
+## Step 1: Detect the SD Card
+
+Call list_volumes. Look for a FAT32 volume (fsType "msdos") that is
+NOT the system disk. Confirm the volume path with the user before
+proceeding. Let CARD = the confirmed volume path (e.g., /Volumes/NDS).
+
+## Step 2: Scan Existing Contents
+
+Call list_directory on CARD. If __rpg/ already exists, warn the user
+that a kernel is already installed and ask whether to overwrite.
+
+## Step 3: Download the Kernel
+
+Call download_file with:
+  url: https://archive.flashcarts.net/Ace3DS+_R4iLS/Ace3DS+_R4iLS_Wood_R4_1.62.zip
+  path: /tmp/Ace3DS+_R4iLS_Wood_R4_1.62.zip
+
+The CDN sometimes drops connections. If the download fails, retry once.
+
+## Step 4: Extract the Archive
+
+Call extract_archive with:
+  path: /tmp/Ace3DS+_R4iLS_Wood_R4_1.62.zip
+  destination: /tmp/wood_r4_kernel
+
+## Step 5: Copy Kernel Files to Card
+
+Call list_directory on /tmp/wood_r4_kernel to see extracted contents.
+Then copy each item to CARD with copy_file (use recursive=true for
+directories):
+
+  copy_file: /tmp/wood_r4_kernel/__rpg -> CARD/__rpg (recursive)
+  copy_file: /tmp/wood_r4_kernel/_DSMENU.DAT -> CARD/_DSMENU.DAT
+  copy_file: /tmp/wood_r4_kernel/_DS_MENU.DAT -> CARD/_DS_MENU.DAT
+
+## Step 6: Create the Games Directory
+
+Call create_directory with path: CARD/Games
+
+## Step 7: Fix globalsettings.ini
+
+Call read_file with path: CARD/__rpg/globalsettings.ini
+Change "showHiddenFiles = 1" to "showHiddenFiles = 0" in the text.
+Call write_file with the modified text to: CARD/__rpg/globalsettings.ini
+
+This prevents macOS AppleDouble junk files from appearing in the
+Wood R4 file browser.
+
+## Step 8: Clean AppleDouble Files
+
+Call clean_dot_files with path: CARD
+This removes all ._* resource fork files macOS created during copying.
+
+## Step 9: Verify
+
+Call list_directory on CARD. Confirm these items exist:
+  __rpg/  Games/  _DSMENU.DAT  _DS_MENU.DAT
+
+Report success to the user. The card is now bootable with the Wood R4
+kernel. Next step: install TWiLight Menu++ (flashcart_twilight_install).
+`
+
+// handleFlashcartInit returns the Wood R4 kernel installation
+// procedure as an MCP prompt message.
+func handleFlashcartInit(
+	ctx context.Context,
+	req *mcp.GetPromptRequest,
+) (*mcp.GetPromptResult, error) {
+	return &mcp.GetPromptResult{
+		Description: "Step-by-step procedure for installing Wood R4 1.62 kernel",
+		Messages: []*mcp.PromptMessage{
+			{
+				Role:    "user",
+				Content: &mcp.TextContent{Text: flashcartInitPrompt},
+			},
+		},
+	}, nil
+}
+
+// flashcartTwilightPrompt contains the step-by-step procedure for
+// installing TWiLight Menu++ on an Ace3DS+ card with Wood R4.
+const flashcartTwilightPrompt = `# TWiLight Menu++ Installation
+
+Step-by-step procedure for installing TWiLight Menu++ on an Ace3DS+
+flashcart SD card that already has the Wood R4 1.62 kernel installed.
+
+## Step 1: Detect the SD Card
+
+Call list_volumes. Find the FAT32 volume (fsType "msdos"). Confirm
+the path with the user. Let CARD = the confirmed volume path.
+
+## Step 2: Verify Wood R4 Is Present
+
+Call file_exists with path: CARD/__rpg
+If __rpg/ does not exist, stop and tell the user to run
+flashcart_init first.
+
+## Step 3: Back Up Saves
+
+Call list_directory on CARD/Games. If any .sav files exist, copy
+them to a safe location (e.g., ~/DS_Flashcart/backups/saves/) using
+copy_file before proceeding.
+
+## Step 4: Download TWiLight Menu++
+
+Call download_file with:
+  url: https://github.com/DS-Homebrew/TWiLightMenu/releases/latest/download/TWiLightMenu-Flashcard.7z
+  path: /tmp/TWiLightMenu-Flashcard.7z
+
+## Step 5: Extract the Archive
+
+Call extract_archive with:
+  path: /tmp/TWiLightMenu-Flashcard.7z
+  destination: /tmp/twilight_menu
+
+## Step 6: Copy Files to Card (Order Matters!)
+
+Copy these items from /tmp/twilight_menu to CARD in this exact order:
+
+a. copy_file: /tmp/twilight_menu/_nds -> CARD/_nds (recursive)
+   Creates the TWiLight core directory with nds-bootstrap,
+   GBARunner2, themes, and settings.
+
+b. copy_file: /tmp/twilight_menu/BOOT.NDS -> CARD/BOOT.NDS
+
+c. copy_file: /tmp/twilight_menu/roms -> CARD/roms (recursive)
+   Creates subdirectories for 17+ console systems.
+
+d. copy_file: /tmp/twilight_menu/snemul.cfg -> CARD/snemul.cfg
+
+e. Copy contents of Autoboot/Ace3DS+/ to CARD root:
+   Call list_directory on "/tmp/twilight_menu/Autoboot/Ace3DS+/"
+   Copy each file to CARD root. These overwrite the Wood R4 boot
+   files with TWiLight autoboot wrappers (_DSMENU.dat, _DS_MENU.dat).
+
+f. Copy contents of Flashcart Loader/Ace3DS+/ to CARD root:
+   Call list_directory on "/tmp/twilight_menu/Flashcart Loader/Ace3DS+/"
+   Copy each item to CARD root (recursive for directories).
+   This creates Wfwd.dat and _wfwd/ (TWiLight's kernel loader).
+
+## Step 7: Fix _wfwd/globalsettings.ini
+
+Call read_file with path: CARD/_wfwd/globalsettings.ini
+Change "showHiddenFiles = 1" to "showHiddenFiles = 0".
+Call write_file with the modified text.
+
+## Step 8: Clean AppleDouble Files
+
+Call clean_dot_files with path: CARD
+
+## Step 9: Verify
+
+Call list_directory on CARD. Confirm these items exist:
+  __rpg/  _nds/  _wfwd/  roms/  Games/
+  _DSMENU.dat  _DS_MENU.dat  BOOT.NDS  Wfwd.dat  snemul.cfg
+
+Report success. Next step: install emulators (flashcart_emulators).
+`
+
+// handleFlashcartTwilight returns the TWiLight Menu++ installation
+// procedure as an MCP prompt message.
+func handleFlashcartTwilight(
+	ctx context.Context,
+	req *mcp.GetPromptRequest,
+) (*mcp.GetPromptResult, error) {
+	return &mcp.GetPromptResult{
+		Description: "Step-by-step procedure for installing TWiLight Menu++",
+		Messages: []*mcp.PromptMessage{
+			{
+				Role:    "user",
+				Content: &mcp.TextContent{Text: flashcartTwilightPrompt},
+			},
+		},
+	}, nil
+}
+
+// flashcartEmulatorsPrompt contains the step-by-step procedure for
+// installing the Virtual Console emulator add-on.
+const flashcartEmulatorsPrompt = `# Virtual Console Emulators Installation
+
+Step-by-step procedure for installing the Virtual Console emulator
+add-on for TWiLight Menu++ on an Ace3DS+ flashcart SD card.
+
+## Step 1: Detect the SD Card
+
+Call list_volumes. Find the FAT32 volume (fsType "msdos"). Confirm
+the path with the user. Let CARD = the confirmed volume path.
+
+## Step 2: Verify TWiLight Menu++ Is Present
+
+Call file_exists with path: CARD/_nds/TWiLightMenu
+If TWiLightMenu/ does not exist, stop and tell the user to run
+flashcart_twilight_install first.
+
+## Step 3: Download the Virtual Console Add-On
+
+Call download_file with:
+  url: https://github.com/DS-Homebrew/TWiLightMenu/releases/latest/download/AddOn-VirtualConsole.7z
+  path: /tmp/AddOn-VirtualConsole.7z
+
+## Step 4: Extract the Archive
+
+Call extract_archive with:
+  path: /tmp/AddOn-VirtualConsole.7z
+  destination: /tmp/virtual_console
+
+## Step 5: Copy Emulators to Card
+
+Call copy_file with:
+  source: /tmp/virtual_console/_nds
+  destination: CARD/_nds
+  recursive: true
+
+This merges the emulator binaries into
+CARD/_nds/TWiLightMenu/emulators/ (22 emulators covering Atari
+2600/5200/7800, ColecoVision, Game Boy, Genesis, NES, SNES, PC
+Engine, Neo Geo Pocket, WonderSwan, Intellivision, and more).
+
+## Step 6: Clean AppleDouble Files
+
+Call clean_dot_files with path: CARD
+
+## Step 7: Verify
+
+Call list_directory on CARD/_nds/TWiLightMenu/emulators/ to confirm
+emulator binaries are present.
+
+Report success. The card now supports retro console emulation via
+TWiLight Menu++. Next step: add box art (flashcart_boxart).
+`
+
+// handleFlashcartEmulators returns the Virtual Console installation
+// procedure as an MCP prompt message.
+func handleFlashcartEmulators(
+	ctx context.Context,
+	req *mcp.GetPromptRequest,
+) (*mcp.GetPromptResult, error) {
+	return &mcp.GetPromptResult{
+		Description: "Step-by-step procedure for installing Virtual Console emulators",
+		Messages: []*mcp.PromptMessage{
+			{
+				Role:    "user",
+				Content: &mcp.TextContent{Text: flashcartEmulatorsPrompt},
+			},
+		},
+	}, nil
+}
+
+// flashcartBoxartPrompt contains the step-by-step procedure for
+// scanning ROMs and downloading box art for each one.
+const flashcartBoxartPrompt = `# Box Art Download and Installation
+
+Step-by-step procedure for scanning all ROMs on a flashcart SD card
+and downloading cover art for each one.
+
+## Step 1: Detect the SD Card
+
+Call list_volumes. Find the FAT32 volume (fsType "msdos"). Confirm
+the path with the user. Let CARD = the confirmed volume path.
+
+## Step 2: Create Box Art Directory
+
+Call create_directory with path: CARD/_nds/TWiLightMenu/boxart
+
+## Step 3: Scan for NDS ROMs
+
+Call list_directory on CARD/Games. Collect all files ending in .nds.
+
+## Step 4: Scan for Non-NDS ROMs
+
+Call list_directory on CARD/roms. For each subdirectory, call
+list_directory to find ROM files. Collect files with these extensions:
+.gb .gbc .gba .nes .sfc .sms .gg .gen .pce .a26 .a52 .a78 .col .int
+.ngp .ws
+
+## Step 5: Download NDS Box Art
+
+For each .nds file found:
+
+a. Call read_bytes with path=<ROM path>, offset=12, length=4
+   This reads the 4-byte Title ID (TID) from the ROM header.
+
+b. If the TID is "####" or all zeros, skip it (homebrew, no art).
+
+c. Call download_file with:
+     url: https://art.gametdb.com/ds/coverS/US/<TID>.png
+     path: CARD/_nds/TWiLightMenu/boxart/<TID>.png
+
+   If US region fails (404), try fallback regions in order:
+     https://art.gametdb.com/ds/coverS/EN/<TID>.png
+     https://art.gametdb.com/ds/coverS/JA/<TID>.png
+
+d. GameTDB coverS images are already 128x115 -- no resizing needed.
+
+## Step 6: Download Non-NDS Box Art
+
+For each non-NDS ROM file found:
+
+a. Map the file extension to libretro system name:
+     .gb  = Nintendo - Game Boy
+     .gbc = Nintendo - Game Boy Color
+     .gba = Nintendo - Game Boy Advance
+     .nes = Nintendo - Nintendo Entertainment System
+     .sfc = Nintendo - Super Nintendo Entertainment System
+     .sms = Sega - Master System - Mark III
+     .gg  = Sega - Game Gear
+     .gen = Sega - Mega Drive - Genesis
+     .pce = NEC - PC Engine - TurboGrafx 16
+     .a26 = Atari - 2600
+     .a52 = Atari - 5200
+     .a78 = Atari - 7800
+     .col = Coleco - ColecoVision
+     .int = Mattel - Intellivision
+     .ngp = SNK - Neo Geo Pocket
+     .ws  = Bandai - WonderSwan
+
+b. Get the ROM filename without extension. URL-encode it for the URL
+   (spaces become %20, parentheses stay as-is).
+
+c. Call download_file with:
+     url: https://thumbnails.libretro.com/<System>/Named_Boxarts/<Name>.png
+     path: /tmp/boxart_<filename>.png
+
+d. Call resize_image with:
+     source: /tmp/boxart_<filename>.png
+     destination: CARD/_nds/TWiLightMenu/boxart/<full_rom_filename>.png
+     width: 128
+     height: 115
+
+   The boxart filename for non-NDS games is the full ROM filename
+   with .png appended (e.g., "Galaga - Destination Earth (USA).gbc.png").
+
+## Step 7: Clean AppleDouble Files
+
+Call clean_dot_files with path: CARD
+
+## Step 8: Report Results
+
+List all games and whether box art was found for each one. Note any
+games where art could not be downloaded (homebrew, obscure titles).
+Report the total number of box art images installed.
+`
+
+// handleFlashcartBoxart returns the box art download procedure as
+// an MCP prompt message.
+func handleFlashcartBoxart(
+	ctx context.Context,
+	req *mcp.GetPromptRequest,
+) (*mcp.GetPromptResult, error) {
+	return &mcp.GetPromptResult{
+		Description: "Step-by-step procedure for downloading box art for all ROMs",
+		Messages: []*mcp.PromptMessage{
+			{
+				Role:    "user",
+				Content: &mcp.TextContent{Text: flashcartBoxartPrompt},
+			},
+		},
+	}, nil
+}
+
+// flashcartAddGamePrompt contains the step-by-step procedure for
+// adding a single ROM to the flashcart with box art. The
+// {{source_path}} placeholder is replaced with the actual path by
+// [handleFlashcartAddGame].
+const flashcartAddGamePrompt = `# Add a ROM to the Flashcart
+
+Step-by-step procedure for copying a single ROM file to the flashcart
+SD card and downloading its box art.
+
+Source ROM: {{source_path}}
+
+## Step 1: Detect the SD Card
+
+Call list_volumes. Find the FAT32 volume (fsType "msdos"). Confirm
+the path with the user. Let CARD = the confirmed volume path.
+
+## Step 2: Identify the ROM Type
+
+Determine the system from the file extension of the source ROM:
+
+  .nds = Nintendo DS -> copy to CARD/Games/
+  .gb .gbc .gba .nes .sfc .sms .gg .gen .pce .a26 .a52 .a78
+  .col .int .ngp .ws = retro console -> copy to CARD/roms/<ext>/
+
+Where <ext> is the extension without the dot (e.g., .gbc -> roms/gbc/).
+
+## Step 3: Copy the ROM
+
+Call copy_file with:
+  source: {{source_path}}
+  destination: CARD/Games/<filename> (for .nds)
+           or: CARD/roms/<ext>/<filename> (for non-NDS)
+
+## Step 4: Download Box Art
+
+For NDS ROMs:
+  a. Call read_bytes on the destination path, offset=12, length=4
+     to read the 4-byte Title ID (TID) from the ROM header.
+  b. If TID is "####" or all zeros, skip (homebrew, no art available).
+  c. Call download_file with:
+       url: https://art.gametdb.com/ds/coverS/US/<TID>.png
+       path: CARD/_nds/TWiLightMenu/boxart/<TID>.png
+     Fallback regions if US fails: EN, then JA.
+
+For non-NDS ROMs:
+  a. Map the extension to libretro system name:
+       .gb=Nintendo - Game Boy  .gbc=Nintendo - Game Boy Color
+       .gba=Nintendo - Game Boy Advance
+       .nes=Nintendo - Nintendo Entertainment System
+       .sfc=Nintendo - Super Nintendo Entertainment System
+       .sms=Sega - Master System - Mark III  .gg=Sega - Game Gear
+       .gen=Sega - Mega Drive - Genesis
+       .pce=NEC - PC Engine - TurboGrafx 16
+       .a26=Atari - 2600  .a52=Atari - 5200  .a78=Atari - 7800
+       .col=Coleco - ColecoVision  .int=Mattel - Intellivision
+       .ngp=SNK - Neo Geo Pocket  .ws=Bandai - WonderSwan
+  b. URL-encode the filename without extension.
+  c. Call download_file with:
+       url: https://thumbnails.libretro.com/<System>/Named_Boxarts/<Name>.png
+       path: /tmp/boxart_temp.png
+  d. Call resize_image with:
+       source: /tmp/boxart_temp.png
+       destination: CARD/_nds/TWiLightMenu/boxart/<full_rom_filename>.png
+       width: 128
+       height: 115
+
+## Step 5: Clean AppleDouble Files
+
+Call clean_dot_files with path: CARD
+
+## Step 6: Confirm
+
+Report the ROM name, where it was placed on the card, and whether
+box art was successfully installed.
+`
+
+// handleFlashcartAddGame returns the add-game procedure as an MCP
+// prompt message, with the source_path argument substituted in.
+func handleFlashcartAddGame(
+	ctx context.Context,
+	req *mcp.GetPromptRequest,
+) (*mcp.GetPromptResult, error) {
+	sourcePath := req.Params.Arguments["source_path"]
+	text := strings.ReplaceAll(flashcartAddGamePrompt, "{{source_path}}", sourcePath)
+	return &mcp.GetPromptResult{
+		Description: "Step-by-step procedure for adding a ROM with box art",
+		Messages: []*mcp.PromptMessage{
+			{
+				Role:    "user",
+				Content: &mcp.TextContent{Text: text},
+			},
+		},
+	}, nil
+}
+
+// flashcartCleanupPrompt contains the step-by-step procedure for
+// cleaning and verifying a flashcart SD card.
+const flashcartCleanupPrompt = `# Flashcart Volume Cleanup
+
+Step-by-step procedure for cleaning and verifying a flashcart SD card.
+
+## Step 1: Detect the SD Card
+
+Call list_volumes. Find the FAT32 volume (fsType "msdos"). Confirm
+the path with the user. Let CARD = the confirmed volume path.
+
+## Step 2: Clean AppleDouble Files
+
+Call clean_dot_files with path: CARD
+Report how many ._* files were removed.
+
+## Step 3: Verify Directory Structure
+
+Check that these key directories and files exist using file_exists:
+  CARD/__rpg/                   (Wood R4 kernel)
+  CARD/__rpg/globalsettings.ini
+  CARD/_nds/TWiLightMenu/       (TWiLight Menu++)
+  CARD/_wfwd/                   (Flashcart loader)
+  CARD/Games/                   (NDS ROMs)
+  CARD/roms/                    (Non-NDS ROMs)
+  CARD/BOOT.NDS                 (TWiLight binary)
+  CARD/_DSMENU.dat              (Autoboot wrapper)
+  CARD/_DS_MENU.dat             (Autoboot wrapper)
+
+Report which items are present and which are missing.
+
+## Step 4: Verify INI Settings
+
+Call read_file with path: CARD/__rpg/globalsettings.ini
+Verify showHiddenFiles = 0. If it is 1, fix it with write_file.
+
+Call read_file with path: CARD/_wfwd/globalsettings.ini
+Verify showHiddenFiles = 0. If it is 1, fix it with write_file.
+
+If either file was modified, call clean_dot_files on CARD again.
+
+## Step 5: Report Disk Usage
+
+Call list_volumes to get the volume's total and free space.
+Calculate used space = total - free.
+Report total, used, and free space in human-readable format.
+
+## Step 6: Scan ROMs
+
+Call list_directory on CARD/Games to count NDS ROMs.
+Call list_directory on CARD/roms, then each subdirectory, to count
+non-NDS ROMs by system.
+
+Report ROM counts by system and total.
+`
+
+// handleFlashcartCleanup returns the volume cleanup procedure as an
+// MCP prompt message.
+func handleFlashcartCleanup(
+	ctx context.Context,
+	req *mcp.GetPromptRequest,
+) (*mcp.GetPromptResult, error) {
+	return &mcp.GetPromptResult{
+		Description: "Step-by-step procedure for cleaning and verifying the card",
+		Messages: []*mcp.PromptMessage{
+			{
+				Role:    "user",
+				Content: &mcp.TextContent{Text: flashcartCleanupPrompt},
+			},
+		},
+	}, nil
+}
+
+// flashcartManualPrompt contains a short user-facing manual that
+// explains what the flashcart tools extension does, how to get
+// started, and what workflows are available.
+const flashcartManualPrompt = `# Flashcart Tools -- User Manual
+
+Flashcart Tools is a Claude Desktop extension that helps you set up
+and maintain Nintendo DS flashcart SD cards. Plug in your card, open
+Claude, and ask -- Claude handles the firmware, ROMs, box art, and
+cleanup.
+
+## Getting Started
+
+1. Install the extension by double-clicking flashcart-tools.mcpb.
+2. Format your micro SD card as FAT32 (use Disk Utility or the
+   Nintendo DS Flashcart Tool).
+3. Insert the card into your computer.
+4. Open Claude Desktop and say: "I want to set up my Ace3DS+
+   flashcart SD card."
+
+Claude will detect the card and walk you through the rest.
+
+## Available Workflows
+
+Run these in order for a fresh card, or individually as needed.
+Ask Claude by name (e.g., "Run flashcart_init") or just describe
+what you want and Claude will pick the right one.
+
+| Prompt                     | What It Does                             |
+|----------------------------|------------------------------------------|
+| flashcart_init             | Install the Wood R4 1.62 base kernel     |
+| flashcart_twilight_install | Install TWiLight Menu++ over the kernel   |
+| flashcart_emulators        | Add Virtual Console emulators (22 cores)  |
+| flashcart_boxart           | Scan all ROMs and download cover art      |
+| flashcart_add_game         | Copy one ROM to the card with box art     |
+| flashcart_cleanup          | Clean junk files and verify card layout   |
+
+## Adding Games
+
+- **NDS games:** Drop .nds files into the Games/ folder on the card
+  (or ask Claude to copy them for you with flashcart_add_game).
+- **Retro games:** Drop ROMs into roms/<system>/ on the card. Claude
+  knows which folder matches which file extension (.gb, .gbc, .gba,
+  .nes, .sfc, .gen, .sms, .gg, .pce, .a26, .a52, .a78, .col, .int,
+  .ngp, .ws).
+- **Box art:** Ask Claude to fetch box art after adding games. NDS
+  art comes from GameTDB; retro art comes from libretro thumbnails.
+
+## Maintenance
+
+- Run flashcart_cleanup periodically to remove macOS junk files
+  (AppleDouble ._* files) and verify the card's directory structure.
+- Claude backs up your save files before making changes to the card.
+- If you reformat or swap cards, your box art cache and saves are
+  preserved in ~/DS_Flashcart/ on your computer.
+
+## Supported Systems
+
+The card runs NDS games natively. With the Virtual Console emulators
+installed, it also plays: Game Boy, Game Boy Color, Game Boy Advance,
+NES, SNES, Genesis/Mega Drive, Master System, Game Gear, PC Engine,
+Atari 2600/5200/7800, ColecoVision, Intellivision, Neo Geo Pocket,
+WonderSwan, and Pokemon Mini.
+
+## Troubleshooting
+
+- **Download fails ("unexpected EOF"):** The CDN sometimes drops
+  connections. Ask Claude to retry -- it handles mirrors and fallback
+  URLs automatically.
+- **Junk files in the game menu:** Run flashcart_cleanup. This clears
+  AppleDouble files and fixes the showHiddenFiles setting.
+- **Card not detected:** Make sure it is formatted as FAT32 and
+  mounted in Finder. Claude looks for FAT32 volumes that are not
+  the system disk.
+- **Box art missing for a game:** Homebrew ROMs and obscure titles
+  may not have cover art in GameTDB or libretro. Claude will tell
+  you which games it could not find art for.
+`
+
+// manualURL is the raw GitHub URL for MANUAL.md. The manual is
+// fetched at runtime so edits to the file take effect without
+// rebuilding the binary.
+const manualURL = "https://raw.githubusercontent.com/herbderby/ManageFlashcartPackage/main/MANUAL.md"
+
+// maxManualBody is the maximum number of bytes read from the
+// fetched manual (256 KiB -- the actual file is ~2 KB).
+const maxManualBody = 256 << 10
+
+// fetchManual tries to download MANUAL.md from GitHub. On any
+// error (network, non-200 status, read failure) it returns the
+// embedded fallback constant.
+func fetchManual(ctx context.Context) string {
+	req, err := newRequest(ctx, manualURL)
+	if err != nil {
+		return flashcartManualPrompt
+	}
+	resp, err := browserClient.Do(req)
+	if err != nil {
+		return flashcartManualPrompt
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return flashcartManualPrompt
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxManualBody))
+	if err != nil || len(body) == 0 {
+		return flashcartManualPrompt
+	}
+	return string(body)
+}
+
+// handleFlashcartManual returns the user-facing manual as an MCP
+// prompt message. It fetches the latest MANUAL.md from GitHub,
+// falling back to the embedded constant if the fetch fails.
+func handleFlashcartManual(
+	ctx context.Context,
+	req *mcp.GetPromptRequest,
+) (*mcp.GetPromptResult, error) {
+	text := fetchManual(ctx)
+	return &mcp.GetPromptResult{
+		Description: "User manual for Flashcart Tools",
+		Messages: []*mcp.PromptMessage{
+			{
+				Role:    "user",
+				Content: &mcp.TextContent{Text: text},
 			},
 		},
 	}, nil
