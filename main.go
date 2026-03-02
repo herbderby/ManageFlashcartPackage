@@ -15,7 +15,7 @@ import (
 func main() {
 	server := mcp.NewServer(&mcp.Implementation{
 		Name:    "flashcart-tools",
-		Version: "0.2.2",
+		Version: "0.2.3",
 	}, nil)
 
 	// Prompt: domain knowledge for flashcart workflows.

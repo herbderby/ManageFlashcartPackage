@@ -12,6 +12,14 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// setStandardHeaders adds User-Agent and Accept-Encoding headers to
+// an HTTP request. Some CDNs (notably blobfrii, used by
+// archive.flashcarts.net) drop connections from bare clients that
+// send no User-Agent.
+func setStandardHeaders(req *http.Request) {
+	req.Header.Set("User-Agent", "Flashcart-Tools/0.2.3")
+}
+
 // DownloadFileInput holds the parameters for the download_file tool.
 type DownloadFileInput struct {
 	URL         string `json:"url" jsonschema:"URL to download"`
@@ -35,6 +43,7 @@ func handleDownloadFile(
 	if err != nil {
 		return nil, nil, fmt.Errorf("create request: %w", err)
 	}
+	setStandardHeaders(httpReq)
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
@@ -98,6 +107,7 @@ func handleFetchURL(
 	if err != nil {
 		return nil, nil, fmt.Errorf("create request: %w", err)
 	}
+	setStandardHeaders(httpReq)
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
