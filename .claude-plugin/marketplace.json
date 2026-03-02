@@ -1,0 +1,20 @@
+{
+  "name": "flashcart-tools",
+  "owner": {
+    "name": "herbderby"
+  },
+  "metadata": {
+    "description": "Nintendo DS flashcart management plugins"
+  },
+  "plugins": [
+    {
+      "name": "HelloSDCard",
+      "source": "./HelloSDCard",
+      "description": "Proof of concept: list mounted volumes from a bundled Go MCP server",
+      "version": "0.1.0",
+      "author": {
+        "name": "herbderby"
+      }
+    }
+  ]
+}
