@@ -81,7 +81,7 @@ recursive copy, AppleDouble cleanup), text file tools, Wood R4
 domain knowledge added.
 
 Phase 2 (complete): Field test with real Ace3DS+ SD card via
-Cowork. PRD and embedded prompt rewritten with field-tested
+Chat. PRD and embedded prompt rewritten with field-tested
 knowledge. See `research/flashcart-setup-report.md`.
 
 Next: commit, reinstall .mcpb, test three-phase setup in Claude
