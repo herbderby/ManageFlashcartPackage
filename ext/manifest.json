@@ -1,0 +1,49 @@
+{
+  "dxt_version": "0.1",
+  "name": "flashcart-tools",
+  "display_name": "Flashcart Tools",
+  "version": "0.2.2",
+  "description": "Manage Nintendo DS flashcart SD cards",
+  "author": {
+    "name": "Herb Derby",
+    "url": "https://github.com/herbderby"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/herbderby/ManageFlashcartPackage"
+  },
+  "server": {
+    "type": "binary",
+    "entry_point": "server/flashcart-tools",
+    "mcp_config": {
+      "command": "${__dirname}/server/flashcart-tools",
+      "args": [],
+      "env": {}
+    }
+  },
+  "tools": [
+    { "name": "list_volumes", "description": "List mounted volumes with filesystem type, total size, and free space" },
+    { "name": "list_directory", "description": "List files and subdirectories at a path" },
+    { "name": "create_directory", "description": "Create a directory and parent directories" },
+    { "name": "move_file", "description": "Move or rename a file or directory" },
+    { "name": "copy_file", "description": "Copy a file or directory (set recursive for directories)" },
+    { "name": "delete_file", "description": "Delete a single file (not recursive)" },
+    { "name": "file_exists", "description": "Check whether a path exists" },
+    { "name": "read_bytes", "description": "Read N bytes at a byte offset from a file" },
+    { "name": "download_file", "description": "Download a URL to a local file path" },
+    { "name": "fetch_url", "description": "Fetch a URL and return the response body as text" },
+    { "name": "extract_archive", "description": "Extract a .7z or .zip archive to a directory" },
+    { "name": "resize_image", "description": "Resize a PNG image to given dimensions" },
+    { "name": "image_info", "description": "Return dimensions and file size of an image" },
+    { "name": "read_file", "description": "Read a text file and return its contents" },
+    { "name": "write_file", "description": "Write text content to a file" },
+    { "name": "read_json", "description": "Read and parse a JSON file" },
+    { "name": "write_json", "description": "Write a JSON object to a file" },
+    { "name": "clean_dot_files", "description": "Remove AppleDouble ._* files from a directory tree" }
+  ],
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["darwin"]
+  },
+  "license": "MIT"
+}
