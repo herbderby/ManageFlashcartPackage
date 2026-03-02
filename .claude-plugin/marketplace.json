@@ -11,7 +11,7 @@
       "name": "HelloSDCard",
       "source": "./HelloSDCard",
       "description": "Proof of concept: list mounted volumes from a bundled Go MCP server",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {
         "name": "herbderby"
       }
