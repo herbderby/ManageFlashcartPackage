@@ -46,6 +46,7 @@ func TestPromptsList(t *testing.T) {
 	}
 
 	want := map[string]bool{
+		"flashcart_identify":         false,
 		"flashcart_knowledge":        false,
 		"flashcart_init":             false,
 		"flashcart_twilight_install": false,
@@ -79,15 +80,17 @@ func TestPromptsGet(t *testing.T) {
 	session := connect(t)
 	defer session.Close()
 
+	ace := map[string]string{"flashcart_model": "ace3ds_plus"}
 	prompts := []struct {
 		name    string
 		args    map[string]string
 		wantSub string // substring expected in the response text
 	}{
-		{"flashcart_knowledge", nil, "Flashcart SD Card Management"},
-		{"flashcart_init", nil, "Wood R4 Kernel Installation"},
-		{"flashcart_twilight_install", nil, "TWiLight Menu++ Installation"},
-		{"flashcart_emulators", nil, "Virtual Console Emulators"},
+		{"flashcart_identify", nil, "Flashcart Identification"},
+		{"flashcart_knowledge", ace, "Flashcart SD Card Management"},
+		{"flashcart_init", ace, "Wood R4 Kernel Installation"},
+		{"flashcart_twilight_install", ace, "TWiLight Menu++ Installation"},
+		{"flashcart_emulators", ace, "Virtual Console Emulators"},
 		{"flashcart_boxart", nil, "Box Art Download"},
 		{"flashcart_add_game", map[string]string{"source_path": "/tmp/test.nds"}, "Add a ROM"},
 		{"flashcart_cleanup", nil, "Flashcart Volume Cleanup"},
@@ -139,6 +142,119 @@ func TestAddGameSubstitution(t *testing.T) {
 	}
 	if strings.Contains(text, "{{source_path}}") {
 		t.Error("unreplaced {{source_path}} placeholder in response")
+	}
+}
+
+// TestModelSubstitution verifies that model-specific placeholders
+// are replaced in parameterized prompts.
+func TestModelSubstitution(t *testing.T) {
+	session := connect(t)
+	defer session.Close()
+
+	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
+		Name:      "flashcart_init",
+		Arguments: map[string]string{"flashcart_model": "ace3ds_plus"},
+	})
+	if err != nil {
+		t.Fatalf("GetPrompt: %v", err)
+	}
+
+	text := result.Messages[0].Content.(*mcp.TextContent).Text
+
+	// Verify Ace3DS+ name appears (substituted from model).
+	if !strings.Contains(text, "Ace3DS+") {
+		t.Error("model display name not substituted into prompt")
+	}
+	// Verify no unreplaced placeholders remain.
+	for _, ph := range []string{"{{model_name}}", "{{kernel_url}}", "{{kernel_archive}}"} {
+		if strings.Contains(text, ph) {
+			t.Errorf("unreplaced placeholder %s in response", ph)
+		}
+	}
+}
+
+// TestModelSubstitution_R4iLS verifies that R4iLS-specific values
+// appear when that model is requested.
+func TestModelSubstitution_R4iLS(t *testing.T) {
+	session := connect(t)
+	defer session.Close()
+
+	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
+		Name:      "flashcart_twilight_install",
+		Arguments: map[string]string{"flashcart_model": "r4ils"},
+	})
+	if err != nil {
+		t.Fatalf("GetPrompt: %v", err)
+	}
+
+	text := result.Messages[0].Content.(*mcp.TextContent).Text
+	if !strings.Contains(text, "R4iLS") {
+		t.Error("R4iLS display name not substituted into prompt")
+	}
+	if !strings.Contains(text, "Autoboot/R4iLS/") {
+		t.Error("R4iLS autoboot directory not substituted into prompt")
+	}
+}
+
+// TestUnknownModel verifies that an unknown model returns an error
+// message rather than a protocol error.
+func TestUnknownModel(t *testing.T) {
+	session := connect(t)
+	defer session.Close()
+
+	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
+		Name:      "flashcart_init",
+		Arguments: map[string]string{"flashcart_model": "nonexistent"},
+	})
+	if err != nil {
+		t.Fatalf("GetPrompt: %v", err)
+	}
+
+	text := result.Messages[0].Content.(*mcp.TextContent).Text
+	if !strings.Contains(text, "Error:") {
+		t.Error("expected error message for unknown model")
+	}
+	if !strings.Contains(text, "nonexistent") {
+		t.Error("error message should mention the unknown model ID")
+	}
+}
+
+// TestUnsupportedModel verifies that a recognized but unsupported
+// model returns an appropriate error message.
+func TestUnsupportedModel(t *testing.T) {
+	session := connect(t)
+	defer session.Close()
+
+	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
+		Name:      "flashcart_init",
+		Arguments: map[string]string{"flashcart_model": "dstt"},
+	})
+	if err != nil {
+		t.Fatalf("GetPrompt: %v", err)
+	}
+
+	text := result.Messages[0].Content.(*mcp.TextContent).Text
+	if !strings.Contains(text, "not yet supported") {
+		t.Error("expected 'not yet supported' message for DSTT")
+	}
+}
+
+// TestMissingModelArg verifies that omitting the flashcart_model
+// argument returns an error message.
+func TestMissingModelArg(t *testing.T) {
+	session := connect(t)
+	defer session.Close()
+
+	result, err := session.GetPrompt(context.Background(), &mcp.GetPromptParams{
+		Name: "flashcart_init",
+	})
+	if err != nil {
+		t.Fatalf("GetPrompt: %v", err)
+	}
+
+	text := result.Messages[0].Content.(*mcp.TextContent).Text
+	if !strings.Contains(text, "Error:") {
+		t.Error("expected error message for missing model argument")
 	}
 }
 

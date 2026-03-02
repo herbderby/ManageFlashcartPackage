@@ -31,7 +31,8 @@ archive.go              # extract_archive tool (7z + zip)
 image.go                # resize_image, image_info tools
 json_tools.go           # read_json, write_json tools
 dotclean.go             # clean_dot_files tool (AppleDouble removal)
-skill.go                # All 8 prompts (knowledge, workflows, manual)
+models.go               # Flashcart model registry and lookup
+skill.go                # All 9 prompts (identify, knowledge, workflows, manual)
 mcp_test.go             # In-process MCP API tests
 Makefile                # Build and pack targets
 ext/
@@ -86,5 +87,10 @@ Phase 2 (complete): Field test with real Ace3DS+ SD card via
 Chat. PRD and embedded prompt rewritten with field-tested
 knowledge. See `research/flashcart-setup-report.md`.
 
-Next: commit, reinstall .mcpb, test three-phase setup in Claude
-Desktop, then decide on skill sub-task implementation.
+Phase 2.1 (complete): Flashcart model registry. Hardcoded
+Ace3DS+ references replaced with parameterized prompts.
+`flashcart_identify` prompt added for photo-based cart ID.
+Models: `models.go`, 18 tools + 9 prompts.
+
+Next: reinstall .mcpb, test identification + parameterized
+setup in Claude Desktop.

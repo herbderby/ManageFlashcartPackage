@@ -456,18 +456,25 @@ knowledge from the skill files.
   writes to a FAT32 volume.
 
 Each tool returns structured JSON. Each tool does one thing.
-18 tools + 8 prompts total.
+18 tools + 9 prompts total.
 
-## Domain Knowledge (Embedded Prompt)
+## Domain Knowledge (Embedded Prompts)
 
 The domain knowledge teaches Claude everything it needs to compose the
 primitives into flashcart workflows. It is embedded in the Go binary as
-a string constant and served via the `flashcart_knowledge` MCP prompt.
+string constants and served via MCP prompts.
+
+### flashcart_identify prompt
+
+Teaches Claude to identify a flashcart model from photographs. Lists
+visual features (sticker URLs, brand text) for each known model. Claude
+reads the printed URL/text on the cart sticker, matches it to a model
+ID, and returns the ID for use with the workflow prompts.
 
 ### flashcart_knowledge prompt
 
-This is the core knowledge, returned when Claude requests the prompt. It
-covers:
+This is the core knowledge, parameterized by `flashcart_model`. It is
+returned when Claude requests the prompt with a model ID. It covers:
 
 **Dual-layer firmware architecture:**
 - Wood R4 1.62 as base layer (boot files, DLDI driver, NDS game loading)
@@ -531,18 +538,22 @@ session documented in `research/flashcart-setup-report.md`. Each can be
 invoked independently or chained together. Every sub-task that writes to
 the SD card MUST end with `clean_dot_files`.
 
-**`flashcart-init`:**
+**`flashcart-identify`:**
+Teach Claude to identify a flashcart model from photographs. Lists
+visual features for each known model. Returns the model ID.
+
+**`flashcart-init` (parameterized by `flashcart_model`):**
 Format verification, Wood R4 kernel download and installation,
 `showHiddenFiles` fix, `Games/` directory creation. Input: flashcart
-model. Output: bootable SD card with base kernel.
+model ID. Output: bootable SD card with base kernel.
 
-**`flashcart-twilight-install`:**
+**`flashcart-twilight-install` (parameterized by `flashcart_model`):**
 Download and install TWiLight Menu++ with appropriate autoboot and
-flashcart loader files for the detected model. Fix
-`_wfwd/globalsettings.ini`. Input: flashcart model (or auto-detect
-from existing kernel files). Output: TWiLight overlaid on base kernel.
+flashcart loader files for the specified model. Fix
+`_wfwd/globalsettings.ini`. Input: flashcart model ID. Output:
+TWiLight overlaid on base kernel.
 
-**`flashcart-emulators`:**
+**`flashcart-emulators` (parameterized by `flashcart_model`):**
 Download and install the Virtual Console add-on. Merges emulator
 binaries into `_nds/TWiLightMenu/emulators/`.
 
@@ -602,8 +613,9 @@ volumes:
   repositories.
 - **Linux support in Phase 2.** Can be added later trivially (Go
   cross-compiles to Linux with one command).
-- **Flashcarts beyond Ace3DS+/R4iLS family.** Other carts (DSTT, etc.)
-  use different kernels (YSMenu). Support can be added later.
+- **Flashcarts beyond the Wood R4 family.** Other carts (DSTT, etc.)
+  use different kernels (YSMenu). They are recognized by the model
+  registry but lack automated setup. Support can be added later.
 
 ## User Experience Walkthrough
 

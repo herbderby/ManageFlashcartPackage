@@ -20,25 +20,59 @@ func newServer() *mcp.Server {
 		Version: "0.2.5",
 	}, nil)
 
-	// Prompts: domain knowledge and step-by-step workflow recipes.
+	// Prompts: identification, domain knowledge, and step-by-step
+	// workflow recipes.
+	server.AddPrompt(&mcp.Prompt{
+		Name:        "flashcart_identify",
+		Description: "Identify a flashcart model from photographs of the cartridge",
+	}, handleFlashcartIdentify)
+
 	server.AddPrompt(&mcp.Prompt{
 		Name:        "flashcart_knowledge",
 		Description: "Domain knowledge for managing DS flashcart SD cards",
+		Arguments: []*mcp.PromptArgument{
+			{
+				Name:        "flashcart_model",
+				Description: "Model ID from the registry (e.g. ace3ds_plus, r4ils)",
+				Required:    true,
+			},
+		},
 	}, handleFlashcartKnowledge)
 
 	server.AddPrompt(&mcp.Prompt{
 		Name:        "flashcart_init",
-		Description: "Step-by-step Wood R4 kernel installation for Ace3DS+",
+		Description: "Step-by-step Wood R4 kernel installation",
+		Arguments: []*mcp.PromptArgument{
+			{
+				Name:        "flashcart_model",
+				Description: "Model ID from the registry (e.g. ace3ds_plus, r4ils)",
+				Required:    true,
+			},
+		},
 	}, handleFlashcartInit)
 
 	server.AddPrompt(&mcp.Prompt{
 		Name:        "flashcart_twilight_install",
-		Description: "Step-by-step TWiLight Menu++ installation for Ace3DS+",
+		Description: "Step-by-step TWiLight Menu++ installation",
+		Arguments: []*mcp.PromptArgument{
+			{
+				Name:        "flashcart_model",
+				Description: "Model ID from the registry (e.g. ace3ds_plus, r4ils)",
+				Required:    true,
+			},
+		},
 	}, handleFlashcartTwilight)
 
 	server.AddPrompt(&mcp.Prompt{
 		Name:        "flashcart_emulators",
 		Description: "Step-by-step Virtual Console emulator add-on installation",
+		Arguments: []*mcp.PromptArgument{
+			{
+				Name:        "flashcart_model",
+				Description: "Model ID from the registry (e.g. ace3ds_plus, r4ils)",
+				Required:    true,
+			},
+		},
 	}, handleFlashcartEmulators)
 
 	server.AddPrompt(&mcp.Prompt{

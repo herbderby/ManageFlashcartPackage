@@ -11,8 +11,10 @@ cleanup.
 2. Format your micro SD card as FAT32 (use Disk Utility or the
    Nintendo DS Flashcart Tool).
 3. Insert the card into your computer.
-4. Open Claude Desktop and say: "I want to set up my Ace3DS+
-   flashcart SD card."
+4. Open Claude Desktop and say: "I want to set up my flashcart
+   SD card." If Claude does not know your flashcart model, it will
+   ask you to photograph the front and back of the cart so it can
+   identify the model from the sticker text.
 
 Claude will detect the card and walk you through the rest.
 
@@ -24,6 +26,7 @@ what you want and Claude will pick the right one.
 
 | Prompt                     | What It Does                             |
 |----------------------------|------------------------------------------|
+| flashcart_identify         | Identify your flashcart model from photos |
 | flashcart_init             | Install the Wood R4 1.62 base kernel     |
 | flashcart_twilight_install | Install TWiLight Menu++ over the kernel   |
 | flashcart_emulators        | Add Virtual Console emulators (22 cores)  |

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"strings"
 
@@ -10,8 +11,8 @@ import (
 
 // flashcartSkill contains the embedded domain knowledge that teaches
 // Claude how to compose the MCP primitive tools into flashcart
-// management workflows. This text is returned by the
-// flashcart_knowledge MCP prompt.
+// management workflows. Placeholders like {{model_name}} are replaced
+// by [handleFlashcartKnowledge] with model-specific values.
 const flashcartSkill = `# Flashcart SD Card Management
 
 You have MCP tools for managing Nintendo DS flashcart SD cards. The
@@ -19,16 +20,18 @@ card runs a dual-layer firmware: Wood R4 1.62 kernel (base) with
 TWiLight Menu++ (menu system) on top. The tools are low-level
 primitives; this document teaches you how to compose them.
 
+This knowledge is configured for the **{{model_name}}** flashcart.
+
 ## SD Card Directory Structure
 
-A fully set up Ace3DS+ card looks like this:
+A fully set up {{model_name}} card looks like this:
 
 ` + "```" + `
 /
 +-- _DSMENU.dat                           # TWiLight autoboot wrapper
 +-- _DS_MENU.dat                          # TWiLight autoboot wrapper
 +-- BOOT.NDS                              # TWiLight Menu++ binary
-+-- Wfwd.dat                              # Ace3DS+ flashcart forwarder
++-- {{forwarder_file}}                    # {{model_name}} flashcart forwarder
 +-- snemul.cfg                            # SNES emulator config
 +-- __rpg/                                # Wood R4 1.62 kernel
 |   +-- globalsettings.ini                #   (showHiddenFiles = 0!)
@@ -50,7 +53,7 @@ A fully set up Ace3DS+ card looks like this:
 ` + "```" + `
 
 System files: __rpg/, _wfwd/, _nds/, _DSMENU.dat, _DS_MENU.dat,
-BOOT.NDS, Wfwd.dat. User ROMs go in Games/ or roms/<system>/.
+BOOT.NDS, {{forwarder_file}}. User ROMs go in Games/ or roms/<system>/.
 Box art goes in _nds/TWiLightMenu/boxart/.
 
 ## ROM Identification
@@ -129,7 +132,7 @@ copy to the card. CDN downloads can fail -- retry or use mirrors.
 ### Phase 1: Wood R4 Kernel
 
 1. Download the kernel:
-   https://archive.flashcarts.net/Ace3DS+_R4iLS/Ace3DS+_R4iLS_Wood_R4_1.62.zip
+   {{kernel_url}}
    (CDN redirects can fail -- retry or use a SourceForge mirror)
 2. Extract to /tmp/, then copy contents to card root.
 3. Create a Games/ directory at card root for ROMs.
@@ -147,10 +150,10 @@ copy to the card. CDN downloads can fail -- retry or use mirrors.
    b. BOOT.NDS to card root
    c. roms/ to card root
    d. snemul.cfg to card root
-   e. Contents of Autoboot/Ace3DS+/ to card root
+   e. Contents of Autoboot/{{autoboot_dir}}/ to card root
       (overwrites _DSMENU.dat and _DS_MENU.dat)
-   f. Contents of Flashcart Loader/Ace3DS+/ to card root
-      (creates Wfwd.dat and _wfwd/)
+   f. Contents of Flashcart Loader/{{loader_dir}}/ to card root
+      (creates {{forwarder_file}} and _wfwd/)
 4. Fix _wfwd/globalsettings.ini: set showHiddenFiles = 0.
 5. IMPORTANT: Do NOT overwrite _nds/TWiLightMenu/settings.ini if it
    already exists -- it contains the user's preferences.
@@ -213,30 +216,37 @@ Both INI files need showHiddenFiles = 0:
 `
 
 // handleFlashcartKnowledge returns the embedded domain knowledge as
-// an MCP prompt message. Claude receives this text at session start
-// and uses it to compose the primitive tools into flashcart workflows.
+// an MCP prompt message, parameterized for the requested flashcart
+// model. Claude receives this text at session start and uses it to
+// compose the primitive tools into flashcart workflows.
 func handleFlashcartKnowledge(
 	ctx context.Context,
 	req *mcp.GetPromptRequest,
 ) (*mcp.GetPromptResult, error) {
+	text, err := substituteModel(flashcartSkill, req.Params.Arguments)
+	if err != nil {
+		return promptError(err)
+	}
 	return &mcp.GetPromptResult{
 		Description: "Domain knowledge for managing DS flashcart SD cards",
 		Messages: []*mcp.PromptMessage{
 			{
 				Role:    "user",
-				Content: &mcp.TextContent{Text: flashcartSkill},
+				Content: &mcp.TextContent{Text: text},
 			},
 		},
 	}, nil
 }
 
 // flashcartInitPrompt contains the step-by-step procedure for
-// installing the Wood R4 1.62 kernel on an Ace3DS+ flashcart SD card.
+// installing the Wood R4 1.62 kernel on a flashcart SD card.
+// Placeholders are replaced by [handleFlashcartInit] with
+// model-specific values.
 const flashcartInitPrompt = `# Wood R4 Kernel Installation
 
-Step-by-step procedure for installing the Wood R4 1.62 kernel on an
-Ace3DS+ flashcart SD card. Follow each step in order, calling the
-named tool at each step.
+Step-by-step procedure for installing the Wood R4 1.62 kernel on a
+{{model_name}} flashcart SD card. Follow each step in order, calling
+the named tool at each step.
 
 ## Step 1: Detect the SD Card
 
@@ -252,15 +262,15 @@ that a kernel is already installed and ask whether to overwrite.
 ## Step 3: Download the Kernel
 
 Call download_file with:
-  url: https://archive.flashcarts.net/Ace3DS+_R4iLS/Ace3DS+_R4iLS_Wood_R4_1.62.zip
-  path: /tmp/Ace3DS+_R4iLS_Wood_R4_1.62.zip
+  url: {{kernel_url}}
+  path: /tmp/{{kernel_archive}}
 
 The CDN sometimes drops connections. If the download fails, retry once.
 
 ## Step 4: Extract the Archive
 
 Call extract_archive with:
-  path: /tmp/Ace3DS+_R4iLS_Wood_R4_1.62.zip
+  path: /tmp/{{kernel_archive}}
   destination: /tmp/wood_r4_kernel
 
 ## Step 5: Copy Kernel Files to Card
@@ -301,28 +311,36 @@ kernel. Next step: install TWiLight Menu++ (flashcart_twilight_install).
 `
 
 // handleFlashcartInit returns the Wood R4 kernel installation
-// procedure as an MCP prompt message.
+// procedure as an MCP prompt message, parameterized for the requested
+// flashcart model.
 func handleFlashcartInit(
 	ctx context.Context,
 	req *mcp.GetPromptRequest,
 ) (*mcp.GetPromptResult, error) {
+	text, err := substituteModel(flashcartInitPrompt, req.Params.Arguments)
+	if err != nil {
+		return promptError(err)
+	}
 	return &mcp.GetPromptResult{
 		Description: "Step-by-step procedure for installing Wood R4 1.62 kernel",
 		Messages: []*mcp.PromptMessage{
 			{
 				Role:    "user",
-				Content: &mcp.TextContent{Text: flashcartInitPrompt},
+				Content: &mcp.TextContent{Text: text},
 			},
 		},
 	}, nil
 }
 
 // flashcartTwilightPrompt contains the step-by-step procedure for
-// installing TWiLight Menu++ on an Ace3DS+ card with Wood R4.
+// installing TWiLight Menu++ on a flashcart card with Wood R4.
+// Placeholders are replaced by [handleFlashcartTwilight] with
+// model-specific values.
 const flashcartTwilightPrompt = `# TWiLight Menu++ Installation
 
-Step-by-step procedure for installing TWiLight Menu++ on an Ace3DS+
-flashcart SD card that already has the Wood R4 1.62 kernel installed.
+Step-by-step procedure for installing TWiLight Menu++ on a
+{{model_name}} flashcart SD card that already has the Wood R4 1.62
+kernel installed.
 
 ## Step 1: Detect the SD Card
 
@@ -368,15 +386,15 @@ c. copy_file: /tmp/twilight_menu/roms -> CARD/roms (recursive)
 
 d. copy_file: /tmp/twilight_menu/snemul.cfg -> CARD/snemul.cfg
 
-e. Copy contents of Autoboot/Ace3DS+/ to CARD root:
-   Call list_directory on "/tmp/twilight_menu/Autoboot/Ace3DS+/"
+e. Copy contents of Autoboot/{{autoboot_dir}}/ to CARD root:
+   Call list_directory on "/tmp/twilight_menu/Autoboot/{{autoboot_dir}}/"
    Copy each file to CARD root. These overwrite the Wood R4 boot
    files with TWiLight autoboot wrappers (_DSMENU.dat, _DS_MENU.dat).
 
-f. Copy contents of Flashcart Loader/Ace3DS+/ to CARD root:
-   Call list_directory on "/tmp/twilight_menu/Flashcart Loader/Ace3DS+/"
+f. Copy contents of Flashcart Loader/{{loader_dir}}/ to CARD root:
+   Call list_directory on "/tmp/twilight_menu/Flashcart Loader/{{loader_dir}}/"
    Copy each item to CARD root (recursive for directories).
-   This creates Wfwd.dat and _wfwd/ (TWiLight's kernel loader).
+   This creates {{forwarder_file}} and _wfwd/ (TWiLight's kernel loader).
 
 ## Step 7: Fix _wfwd/globalsettings.ini
 
@@ -392,34 +410,40 @@ Call clean_dot_files with path: CARD
 
 Call list_directory on CARD. Confirm these items exist:
   __rpg/  _nds/  _wfwd/  roms/  Games/
-  _DSMENU.dat  _DS_MENU.dat  BOOT.NDS  Wfwd.dat  snemul.cfg
+  _DSMENU.dat  _DS_MENU.dat  BOOT.NDS  {{forwarder_file}}  snemul.cfg
 
 Report success. Next step: install emulators (flashcart_emulators).
 `
 
 // handleFlashcartTwilight returns the TWiLight Menu++ installation
-// procedure as an MCP prompt message.
+// procedure as an MCP prompt message, parameterized for the requested
+// flashcart model.
 func handleFlashcartTwilight(
 	ctx context.Context,
 	req *mcp.GetPromptRequest,
 ) (*mcp.GetPromptResult, error) {
+	text, err := substituteModel(flashcartTwilightPrompt, req.Params.Arguments)
+	if err != nil {
+		return promptError(err)
+	}
 	return &mcp.GetPromptResult{
 		Description: "Step-by-step procedure for installing TWiLight Menu++",
 		Messages: []*mcp.PromptMessage{
 			{
 				Role:    "user",
-				Content: &mcp.TextContent{Text: flashcartTwilightPrompt},
+				Content: &mcp.TextContent{Text: text},
 			},
 		},
 	}, nil
 }
 
 // flashcartEmulatorsPrompt contains the step-by-step procedure for
-// installing the Virtual Console emulator add-on.
+// installing the Virtual Console emulator add-on. The {{model_name}}
+// placeholder is replaced by [handleFlashcartEmulators].
 const flashcartEmulatorsPrompt = `# Virtual Console Emulators Installation
 
 Step-by-step procedure for installing the Virtual Console emulator
-add-on for TWiLight Menu++ on an Ace3DS+ flashcart SD card.
+add-on for TWiLight Menu++ on a {{model_name}} flashcart SD card.
 
 ## Step 1: Detect the SD Card
 
@@ -470,17 +494,22 @@ TWiLight Menu++. Next step: add box art (flashcart_boxart).
 `
 
 // handleFlashcartEmulators returns the Virtual Console installation
-// procedure as an MCP prompt message.
+// procedure as an MCP prompt message, parameterized for the requested
+// flashcart model.
 func handleFlashcartEmulators(
 	ctx context.Context,
 	req *mcp.GetPromptRequest,
 ) (*mcp.GetPromptResult, error) {
+	text, err := substituteModel(flashcartEmulatorsPrompt, req.Params.Arguments)
+	if err != nil {
+		return promptError(err)
+	}
 	return &mcp.GetPromptResult{
 		Description: "Step-by-step procedure for installing Virtual Console emulators",
 		Messages: []*mcp.PromptMessage{
 			{
 				Role:    "user",
-				Content: &mcp.TextContent{Text: flashcartEmulatorsPrompt},
+				Content: &mcp.TextContent{Text: text},
 			},
 		},
 	}, nil
@@ -782,8 +811,10 @@ cleanup.
 2. Format your micro SD card as FAT32 (use Disk Utility or the
    Nintendo DS Flashcart Tool).
 3. Insert the card into your computer.
-4. Open Claude Desktop and say: "I want to set up my Ace3DS+
-   flashcart SD card."
+4. Open Claude Desktop and say: "I want to set up my flashcart
+   SD card." If Claude does not know your flashcart model, it will
+   ask you to photograph the front and back of the cart so it can
+   identify the model from the sticker text.
 
 Claude will detect the card and walk you through the rest.
 
@@ -795,6 +826,7 @@ what you want and Claude will pick the right one.
 
 | Prompt                     | What It Does                             |
 |----------------------------|------------------------------------------|
+| flashcart_identify         | Identify your flashcart model from photos |
 | flashcart_init             | Install the Wood R4 1.62 base kernel     |
 | flashcart_twilight_install | Install TWiLight Menu++ over the kernel   |
 | flashcart_emulators        | Add Virtual Console emulators (22 cores)  |
@@ -890,6 +922,132 @@ func handleFlashcartManual(
 			{
 				Role:    "user",
 				Content: &mcp.TextContent{Text: text},
+			},
+		},
+	}, nil
+}
+
+// flashcartIdentifyPrompt teaches Claude how to identify a flashcart
+// model from photographs of the front and back of the cartridge.
+// The {{model_list}} placeholder is replaced at runtime with the
+// current registry contents.
+const flashcartIdentifyPrompt = `# Flashcart Identification
+
+Help the user identify their Nintendo DS flashcart model by examining
+photographs of the cartridge.
+
+## Instructions
+
+1. Ask the user to take two photos of their flashcart cartridge:
+   - **Front:** the label/sticker side
+   - **Back:** the circuit board / connector side
+
+2. Examine the photos for these identifying features:
+   - **Printed URL** on the sticker (most reliable identifier)
+   - **Brand name** or model text on the label
+   - **Color and design** of the sticker artwork
+   - **PCB color** and chip layout on the back
+
+3. Match the observed features against the known models listed below.
+
+4. Report your findings:
+   - The identified model ID (use this with other flashcart prompts)
+   - The display name
+   - Whether the model is fully supported for automated setup
+   - If not supported, explain what the user can do instead
+
+5. If you cannot identify the model:
+   - List the features you observed
+   - Suggest the user post photos to r/flashcarts on Reddit for
+     community identification
+   - Note that Wood R4-based carts are the most likely to work with
+     this tool
+
+## Known Models
+
+{{model_list}}
+
+## Common Visual Patterns
+
+- **"ace3ds.com" on sticker** -> Ace3DS+ (ace3ds_plus)
+- **"r4ils.com" on sticker** -> R4iLS (r4ils)
+- **"r4ds.com" or "r4ds.cn" on sticker** -> Original R4 (r4_original)
+- **"r4sdhc.com" on sticker** -> R4 SDHC (r4sdhc)
+- **"dstt.net" or "ndstt.com" on sticker** -> DSTT (dstt)
+- **"r4isdhc.com" with year on sticker** -> R4i-SDHC DEMON (r4i_sdhc_demon)
+- **"r4ids.cn" on sticker** -> R4i Gold (r4i_gold)
+- **"gateway-3ds.com" blue card** -> Gateway Blue (gateway_blue)
+- **"acekard.com" on sticker** -> Acekard 2i (acekard_2i)
+- **"supercard.sc" on sticker** -> SuperCard DSONE (supercard_dsone)
+
+## Important Notes
+
+- Many R4 clones look identical but use different firmware. The
+  printed URL on the sticker is the most reliable way to tell them
+  apart.
+- If the sticker is missing or unreadable, the PCB markings and
+  chip layout may help narrow it down.
+- Carts labeled "R4" without further identification are often Ace3DS+
+  or R4 SDHC clones.
+`
+
+// handleFlashcartIdentify returns the flashcart identification
+// procedure as an MCP prompt message, with the current model
+// registry embedded.
+func handleFlashcartIdentify(
+	ctx context.Context,
+	req *mcp.GetPromptRequest,
+) (*mcp.GetPromptResult, error) {
+	text := strings.ReplaceAll(flashcartIdentifyPrompt, "{{model_list}}", modelListText())
+	return &mcp.GetPromptResult{
+		Description: "Identify a flashcart model from photographs",
+		Messages: []*mcp.PromptMessage{
+			{
+				Role:    "user",
+				Content: &mcp.TextContent{Text: text},
+			},
+		},
+	}, nil
+}
+
+// substituteModel looks up the flashcart model from the prompt
+// arguments and replaces all model-specific placeholders in text.
+// Returns an error if the model argument is missing or unknown, or
+// if the model is recognized but not yet supported.
+func substituteModel(text string, args map[string]string) (string, error) {
+	id, ok := args["flashcart_model"]
+	if !ok || id == "" {
+		return "", fmt.Errorf("missing required argument: flashcart_model")
+	}
+	m, err := lookupModel(id)
+	if err != nil {
+		return "", err
+	}
+	if !m.Supported {
+		return "", fmt.Errorf("flashcart model %q (%s) is recognized but not yet supported for automated setup", m.ID, m.DisplayName)
+	}
+
+	r := strings.NewReplacer(
+		"{{model_name}}", m.DisplayName,
+		"{{kernel_url}}", m.KernelURL,
+		"{{kernel_archive}}", m.KernelArchive,
+		"{{autoboot_dir}}", m.AutobootDir,
+		"{{loader_dir}}", m.LoaderDir,
+		"{{forwarder_file}}", m.ForwarderFile,
+	)
+	return r.Replace(text), nil
+}
+
+// promptError returns a GetPromptResult containing an error message.
+// This is used when model lookup fails so the caller still gets a
+// readable prompt response rather than a protocol-level error.
+func promptError(err error) (*mcp.GetPromptResult, error) {
+	return &mcp.GetPromptResult{
+		Description: "Error",
+		Messages: []*mcp.PromptMessage{
+			{
+				Role:    "user",
+				Content: &mcp.TextContent{Text: "Error: " + err.Error()},
 			},
 		},
 	}, nil
