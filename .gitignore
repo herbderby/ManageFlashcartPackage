@@ -1,4 +1,5 @@
 # Binaries (root only; ext/server/ is the distributable plugin artifact)
+/ManageFlashcartPackage
 /bin/
 *.exe
 *.exe~
