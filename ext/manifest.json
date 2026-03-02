@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "flashcart-tools",
   "display_name": "Flashcart Tools",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Manage Nintendo DS flashcart SD cards",
   "author": {
     "name": "Herb Derby",
