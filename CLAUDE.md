@@ -103,5 +103,5 @@ identification. `compute_sha1` and `lookup_nointro` tools.
 Box art prompts rewritten to hash first, filename fallback.
 20 tools + 9 prompts.
 
-Next: reinstall .mcpb, test SHA1-based box art lookup with
-renamed ROMs in Claude Desktop.
+Next: improve flashcart identification from photos
+(see NEXT.md for details).
