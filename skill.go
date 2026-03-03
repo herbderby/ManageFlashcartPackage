@@ -864,6 +864,11 @@ WonderSwan, and Pokemon Mini.
   you which games it could not find art for.
 `
 
+// identifyGuideURL is the raw GitHub URL for the comprehensive
+// flashcart identification guide. Fetched at runtime so guide
+// updates take effect without rebuilding the binary.
+const identifyGuideURL = "https://raw.githubusercontent.com/herbderby/ManageFlashcartPackage/main/research/flashcart_identification_guide.md"
+
 // manualURL is the raw GitHub URL for MANUAL.md. The manual is
 // fetched at runtime so edits to the file take effect without
 // rebuilding the binary.
@@ -872,6 +877,29 @@ const manualURL = "https://raw.githubusercontent.com/herbderby/ManageFlashcartPa
 // maxManualBody is the maximum number of bytes read from the
 // fetched manual (256 KiB -- the actual file is ~2 KB).
 const maxManualBody = 256 << 10
+
+// fetchIdentifyGuide downloads the comprehensive flashcart
+// identification guide from GitHub. On any error it returns the
+// embedded flashcartIdentifyPrompt as a fallback.
+func fetchIdentifyGuide(ctx context.Context) string {
+	req, err := newRequest(ctx, identifyGuideURL)
+	if err != nil {
+		return flashcartIdentifyPrompt
+	}
+	resp, err := browserClient.Do(req)
+	if err != nil {
+		return flashcartIdentifyPrompt
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return flashcartIdentifyPrompt
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, maxManualBody))
+	if err != nil || len(body) == 0 {
+		return flashcartIdentifyPrompt
+	}
+	return string(body)
+}
 
 // fetchManual tries to download MANUAL.md from GitHub. On any
 // error (network, non-200 status, read failure) it returns the
@@ -980,13 +1008,16 @@ photographs of the cartridge.
 `
 
 // handleFlashcartIdentify returns the flashcart identification
-// procedure as an MCP prompt message, with the current model
-// registry embedded.
+// guide as an MCP prompt message. It fetches the comprehensive
+// guide from GitHub, falling back to the embedded constant if the
+// fetch fails. The model registry is always appended so Claude
+// knows which models support automated setup.
 func handleFlashcartIdentify(
 	ctx context.Context,
 	req *mcp.GetPromptRequest,
 ) (*mcp.GetPromptResult, error) {
-	text := strings.ReplaceAll(flashcartIdentifyPrompt, "{{model_list}}", modelListText())
+	guide := fetchIdentifyGuide(ctx)
+	text := guide + "\n\n" + modelListText()
 	return &mcp.GetPromptResult{
 		Description: "Identify a flashcart model from photographs",
 		Messages: []*mcp.PromptMessage{

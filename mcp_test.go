@@ -88,7 +88,7 @@ func TestPromptsGet(t *testing.T) {
 		args    map[string]string
 		wantSub string // substring expected in the response text
 	}{
-		{"flashcart_identify", nil, "Flashcart Identification"},
+		{"flashcart_identify", nil, "Fully Supported"},
 		{"flashcart_knowledge", ace, "Flashcart SD Card Management"},
 		{"flashcart_init", ace, "Wood R4 Kernel Installation"},
 		{"flashcart_twilight_install", ace, "TWiLight Menu++ Installation"},
