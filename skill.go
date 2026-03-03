@@ -1029,6 +1029,22 @@ func handleFlashcartIdentify(
 	}, nil
 }
 
+// handleFlashcartHelp is a tool (not a prompt) that returns the user
+// manual. Tools are always visible in Chat's tool list, making this
+// reliably discoverable when someone asks for help.
+func handleFlashcartHelp(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	_ struct{},
+) (*mcp.CallToolResult, any, error) {
+	text := fetchManual(ctx)
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: text},
+		},
+	}, nil, nil
+}
+
 // substituteModel looks up the flashcart model from the prompt
 // arguments and replaces all model-specific placeholders in text.
 // Returns an error if the model argument is missing or unknown, or

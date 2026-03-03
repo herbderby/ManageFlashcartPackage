@@ -260,7 +260,7 @@ func TestMissingModelArg(t *testing.T) {
 	}
 }
 
-// TestToolsList verifies that all 20 tools are registered.
+// TestToolsList verifies that all 21 tools are registered.
 func TestToolsList(t *testing.T) {
 	session := connect(t)
 	defer session.Close()
@@ -271,6 +271,7 @@ func TestToolsList(t *testing.T) {
 	}
 
 	want := []string{
+		"flashcart_help",
 		"list_volumes", "list_directory", "create_directory",
 		"move_file", "copy_file", "delete_file", "file_exists",
 		"read_bytes", "compute_sha1", "lookup_nointro",

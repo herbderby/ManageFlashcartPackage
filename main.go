@@ -102,6 +102,13 @@ func newServer() *mcp.Server {
 		Description: "User manual: getting started, workflows, and troubleshooting",
 	}, handleFlashcartManual)
 
+	// Help tool -- always visible in the tool list so Chat finds
+	// it reliably when someone asks for help or a manual.
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "flashcart_help",
+		Description: "Show the Flashcart Tools user manual: getting started, available workflows, troubleshooting.",
+	}, handleFlashcartHelp)
+
 	// Volume tools.
 	mcp.AddTool(server, &mcp.Tool{
 		Name:        "list_volumes",
