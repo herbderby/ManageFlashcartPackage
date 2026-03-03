@@ -9,6 +9,262 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+// readMeFirstText is the routing table and workflow reference that
+// Chat receives when it calls the read_me_first tool. This acts as
+// Chat's CLAUDE.md: critical rules, tool catalog, trigger conditions,
+// and step-by-step workflows with all key facts inline so Chat never
+// needs to discover prompts.
+const readMeFirstText = `# Flashcart Tools -- Reference Guide
+
+You are an MCP extension that manages Nintendo DS flashcart SD cards.
+You have primitive tools (filesystem, network, archive, image) plus
+domain knowledge in this document. Read this BEFORE doing anything.
+
+## CRITICAL RULES
+
+1. **IDENTIFY THE CART FIRST.** Call flashcart_identify before any
+   setup workflow. Different carts need different kernels. Wrong
+   kernel = won't boot or PERMANENT BRICK. Never assume a model.
+
+2. **VERIFY FAT32.** Call list_volumes and check that the target
+   volume has fsType "msdos". If it shows "exfat" or anything else,
+   tell the user to reformat as FAT32 before proceeding.
+
+3. **CLEAN DOT FILES AFTER EVERY WRITE.** Every file copy to FAT32
+   on macOS creates invisible ._* junk files. Call clean_dot_files
+   on the volume after EVERY batch of file writes. Not optional.
+
+4. **EXTRACT TO /tmp/ FIRST.** Never extract archives directly onto
+   the SD card. Extract to /tmp/, then copy files to the card.
+
+5. **CONFIRM WITH THE USER.** Always confirm the volume path before
+   writing. Never delete ROMs without explicit approval.
+
+## TOOL CATALOG
+
+### Discovery Tools (call these first)
+
+- read_me_first: This document. Call at session start.
+- flashcart_identify: Visual identification guide for carts from
+  photos. Call BEFORE any setup. Returns PCB/shell/label analysis
+  guide plus the model registry.
+- flashcart_help: User manual (getting started, workflows, FAQ).
+
+### Volume & Filesystem
+
+- list_volumes: List mounted volumes (fsType, size, free space).
+- list_directory: List files/dirs with sizes and dates.
+- create_directory: Create directory and parents.
+- move_file: Move or rename a file/directory.
+- copy_file: Copy file or dir. IMPORTANT: set recursive=true for dirs.
+- delete_file: Delete a single file (not recursive).
+- file_exists: Check if path exists and is file or directory.
+- clean_dot_files: Remove ._* AppleDouble files from a directory tree.
+
+### ROM & Data
+
+- read_bytes: Read N bytes at offset (hex + ASCII). Used for ROM
+  header parsing (TID at offset 12, length 4).
+- compute_sha1: SHA1 hash of a file. Used for No-Intro lookup.
+- lookup_nointro: ROM identification from SHA1 hash. Returns
+  canonical name and console system for box art lookup.
+- read_file / write_file: Text file I/O (INI configs, etc.).
+- read_json / write_json: JSON file I/O.
+
+### Network
+
+- download_file: Download URL to local path. CDN downloads can fail;
+  retry once on failure.
+- fetch_url: Fetch URL, return body as text (max 1 MiB).
+
+### Archive & Image
+
+- extract_archive: Extract .7z or .zip to a directory.
+- resize_image: Resize PNG. Params: source, destination, width, height.
+  NOTE: uses "source" and "destination", NOT "path".
+- image_info: Image dimensions and file size. Param: path.
+
+## SUPPORTED MODELS
+
+| Model ID | Name | Kernel | Autoboot Dir | Loader Dir |
+|----------|------|--------|-------------|-----------|
+| ace3ds_plus | Ace3DS+ | Ace Wood R4 1.62 | Ace3DS+ | Ace3DS+ |
+| r4ils | R4iLS | Ace Wood R4 1.62 | R4iLS | R4iLS |
+
+Both download the SAME kernel archive:
+https://archive.flashcarts.net/Ace3DS+_R4iLS/Ace3DS+_R4iLS_Wood_R4_1.62.zip
+
+The Autoboot and Flashcart Loader subdirectory names are model-specific.
+Use the table above to select the correct subdirectory.
+
+Ace3DS+ is the most common cart sold today. Carts labeled "R4 SDHC
+Dual-Core," "Gold Pro," "RTS Lite," or "SMART UPDATE" with a RED PCB
+are Ace3DS+ clones regardless of what the front label says.
+
+## WORKFLOW: FULL CARD SETUP
+
+Run these phases in order for a fresh card.
+
+### Phase 1: Install Kernel
+
+1. Call flashcart_identify. Get the model ID (e.g., ace3ds_plus).
+2. Call list_volumes. Find the FAT32 volume (fsType "msdos").
+   Confirm path with user. Let CARD = volume path.
+3. download_file: kernel archive to /tmp/.
+4. extract_archive: to /tmp/wood_r4_kernel/.
+5. list_directory on extracted folder. Then copy_file (recursive)
+   each item to CARD: __rpg/, _DSMENU.DAT, _DS_MENU.DAT.
+6. create_directory: CARD/Games/.
+7. read_file CARD/__rpg/globalsettings.ini, change
+   "showHiddenFiles = 1" to "showHiddenFiles = 0", write_file back.
+8. clean_dot_files on CARD.
+9. Verify: list_directory CARD. Expect __rpg/, Games/, _DSMENU.DAT,
+   _DS_MENU.DAT.
+
+### Phase 2: Install TWiLight Menu++
+
+1. download_file:
+   https://github.com/DS-Homebrew/TWiLightMenu/releases/latest/download/TWiLightMenu-Flashcard.7z
+   to /tmp/TWiLightMenu-Flashcard.7z.
+2. extract_archive: to /tmp/twilight_menu/.
+3. Copy to CARD in this exact order:
+   a. copy_file (recursive): _nds -> CARD/_nds
+   b. copy_file: BOOT.NDS -> CARD/BOOT.NDS
+   c. copy_file (recursive): roms -> CARD/roms
+   d. copy_file: snemul.cfg -> CARD/snemul.cfg
+   e. list_directory on "Autoboot/{model_autoboot_dir}/", copy each
+      file to CARD root. These are _DSMENU.dat and _DS_MENU.dat.
+   f. list_directory on "Flashcart Loader/{model_loader_dir}/", copy
+      each item (recursive for dirs) to CARD root. Creates the
+      forwarder file and _wfwd/ directory.
+4. read_file CARD/_wfwd/globalsettings.ini, change
+   showHiddenFiles = 1 to 0, write_file back.
+5. Do NOT overwrite CARD/_nds/TWiLightMenu/settings.ini if it exists.
+6. clean_dot_files on CARD.
+
+### Phase 3: Install Virtual Console Emulators
+
+1. download_file:
+   https://github.com/DS-Homebrew/TWiLightMenu/releases/latest/download/AddOn-VirtualConsole.7z
+   to /tmp/AddOn-VirtualConsole.7z.
+2. extract_archive: to /tmp/virtual_console/.
+3. copy_file (recursive): _nds -> CARD/_nds.
+4. clean_dot_files on CARD.
+
+## WORKFLOW: BOX ART
+
+All box art goes to CARD/_nds/TWiLightMenu/boxart/.
+Target size: 128x115 pixels.
+
+### NDS Games (GameTDB)
+
+1. read_bytes on ROM, offset=12, length=4 -> TID (4-byte ASCII).
+2. Skip if TID is "####" or all zeros (homebrew).
+3. download_file:
+   https://art.gametdb.com/ds/coverS/US/{TID}.png
+   to CARD/_nds/TWiLightMenu/boxart/{TID}.png.
+   IMPORTANT: use /coverS/ (small cover, 128x115). NOT /cover/.
+   Fallback regions if US 404s: EN, then JA.
+4. coverS images are already 128x115 -- no resize needed.
+
+### Non-NDS Games (SHA1 + libretro thumbnails)
+
+1. compute_sha1 on the ROM file.
+2. lookup_nointro with the SHA1 hash.
+3. If found=true: use returned name and system.
+   If found=false: use ROM filename without extension as name,
+   and map extension to system:
+     .gb  -> Nintendo - Game Boy
+     .gbc -> Nintendo - Game Boy Color
+     .gba -> Nintendo - Game Boy Advance
+     .nes -> Nintendo - Nintendo Entertainment System
+     .sfc -> Nintendo - Super Nintendo Entertainment System
+     .sms -> Sega - Master System - Mark III
+     .gg  -> Sega - Game Gear
+     .gen -> Sega - Mega Drive - Genesis
+     .pce -> NEC - PC Engine - TurboGrafx 16
+     .a26 -> Atari - 2600
+     .a52 -> Atari - 5200
+     .a78 -> Atari - 7800
+     .col -> Coleco - ColecoVision
+     .int -> Mattel - Intellivision
+     .ngp -> SNK - Neo Geo Pocket
+     .ws  -> Bandai - WonderSwan
+4. URL-encode the name (spaces -> %20). download_file:
+   https://thumbnails.libretro.com/{System}/Named_Boxarts/{Name}.png
+   to /tmp/boxart_temp.png.
+5. resize_image: source=/tmp/boxart_temp.png,
+   destination=CARD/_nds/TWiLightMenu/boxart/{full_rom_filename}.png,
+   width=128, height=115.
+   Boxart filename = full ROM filename + .png (e.g., "Game.gbc.png").
+6. clean_dot_files on CARD.
+
+## WORKFLOW: ADD ONE GAME
+
+1. Determine system from extension:
+   .nds -> copy to CARD/Games/
+   All others -> copy to CARD/roms/{ext without dot}/
+2. copy_file to the correct location.
+3. Download box art (NDS or non-NDS workflow above).
+4. clean_dot_files on CARD.
+
+## WORKFLOW: CLEANUP
+
+1. clean_dot_files on CARD.
+2. file_exists checks: __rpg/, _nds/TWiLightMenu/, _wfwd/, Games/,
+   roms/, BOOT.NDS, _DSMENU.dat, _DS_MENU.dat.
+3. read_file both INI files, verify showHiddenFiles = 0.
+4. list_volumes for disk usage report.
+
+## SD CARD DIRECTORY STRUCTURE
+
+A fully set up card looks like this:
+
+` + "```" + `
+CARD/
++-- _DSMENU.dat            # TWiLight autoboot wrapper
++-- _DS_MENU.dat           # TWiLight autoboot wrapper
++-- BOOT.NDS               # TWiLight Menu++ binary
++-- Wfwd.dat               # Flashcart forwarder (model-specific name)
++-- snemul.cfg             # SNES emulator config
++-- __rpg/                 # Wood R4 kernel
+|   +-- globalsettings.ini #   showHiddenFiles = 0!
++-- _wfwd/                 # TWiLight's kernel loader
++-- _nds/
+|   +-- TWiLightMenu/
+|       +-- boxart/        # Cover art PNGs
+|       +-- emulators/     # 22 emulator binaries
++-- Games/                 # NDS ROMs
++-- roms/                  # Non-NDS ROMs by system
+    +-- gb/ gbc/ gba/ nes/ sfc/ sms/ gg/ gen/ pce/
+    +-- a26/ a52/ a78/ col/ int/ ngp/ ws/
+` + "```" + `
+
+## SAFETY
+
+- ALWAYS back up saves (*.sav from Games/) before modifying a card.
+- NEVER delete ROMs without explicit user approval.
+- If unsure about cart identity, try Ace Wood R4 kernel first. If
+  it's actually a DEMON cart, it just won't boot (no damage).
+- Wrong kernel on specific carts CAN cause permanent brick. Call
+  flashcart_identify first. See the identification guide for the
+  dangerous combinations.
+`
+
+// handleReadMeFirst returns the routing table and workflow reference
+// that teaches Chat how to use the flashcart tools extension.
+func handleReadMeFirst(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	_ struct{},
+) (*mcp.CallToolResult, any, error) {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: readMeFirstText},
+		},
+	}, nil, nil
+}
+
 // flashcartSkill contains the embedded domain knowledge that teaches
 // Claude how to compose the MCP primitive tools into flashcart
 // management workflows. Placeholders like {{model_name}} are replaced

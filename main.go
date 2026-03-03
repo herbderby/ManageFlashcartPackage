@@ -102,6 +102,14 @@ func newServer() *mcp.Server {
 		Description: "User manual: getting started, workflows, and troubleshooting",
 	}, handleFlashcartManual)
 
+	// Read-me-first tool -- Chat's CLAUDE.md. Contains critical
+	// rules, tool catalog, trigger conditions, and complete
+	// workflow procedures. Call at session start.
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "read_me_first",
+		Description: "IMPORTANT: Call this tool FIRST before doing anything with flashcart tools. Returns the complete reference guide: critical rules, tool catalog, setup workflows, box art procedures, and safety guidelines.",
+	}, handleReadMeFirst)
+
 	// Identification tool -- Chat sees "flashcart_identify" in
 	// the tool list and calls it when asked to identify a cart.
 	mcp.AddTool(server, &mcp.Tool{
