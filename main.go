@@ -102,6 +102,13 @@ func newServer() *mcp.Server {
 		Description: "User manual: getting started, workflows, and troubleshooting",
 	}, handleFlashcartManual)
 
+	// Identification tool -- Chat sees "flashcart_identify" in
+	// the tool list and calls it when asked to identify a cart.
+	mcp.AddTool(server, &mcp.Tool{
+		Name:        "flashcart_identify",
+		Description: "Return the flashcart visual identification guide. Call this before identifying a DS flashcart from photos. Covers PCB color, shell indent patterns, label analysis, and kernel selection.",
+	}, handleFlashcartIdentifyTool)
+
 	// Help tool -- always visible in the tool list so Chat finds
 	// it reliably when someone asks for help or a manual.
 	mcp.AddTool(server, &mcp.Tool{

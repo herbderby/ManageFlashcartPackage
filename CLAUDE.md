@@ -101,7 +101,7 @@ Phase 2.2 (complete): Non-NDS box art SHA1 lookup. Embedded
 No-Intro database (~21K entries) for hash-based ROM
 identification. `compute_sha1` and `lookup_nointro` tools.
 Box art prompts rewritten to hash first, filename fallback.
-21 tools + 9 prompts.
+22 tools + 9 prompts.
 
 Next: improve flashcart identification from photos
 (see NEXT.md for details).

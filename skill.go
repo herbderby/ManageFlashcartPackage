@@ -1029,6 +1029,23 @@ func handleFlashcartIdentify(
 	}, nil
 }
 
+// handleFlashcartIdentifyTool is a tool (not a prompt) that returns
+// the identification guide. Chat sees "flashcart_identify" in its
+// tool list and calls it reflexively when asked to identify a cart.
+func handleFlashcartIdentifyTool(
+	ctx context.Context,
+	req *mcp.CallToolRequest,
+	_ struct{},
+) (*mcp.CallToolResult, any, error) {
+	guide := fetchIdentifyGuide(ctx)
+	text := guide + "\n\n" + modelListText()
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: text},
+		},
+	}, nil, nil
+}
+
 // handleFlashcartHelp is a tool (not a prompt) that returns the user
 // manual. Tools are always visible in Chat's tool list, making this
 // reliably discoverable when someone asks for help.
