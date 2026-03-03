@@ -201,18 +201,16 @@ Target size: 128x115 pixels.
 
 ## WORKFLOW: ADD ONE GAME
 
-1. Determine system from extension:
-   .nds -> copy to CARD/Games/
-   All others -> copy to CARD/roms/{ext without dot}/
-2. copy_file to the correct location.
-3. Download box art (NDS or non-NDS workflow above).
-4. clean_dot_files on CARD.
+1. copy_file the ROM to CARD/Games/.
+   TWiLight Menu++ selects the emulator from the file extension.
+2. Download box art (NDS or non-NDS workflow above).
+3. clean_dot_files on CARD.
 
 ## WORKFLOW: CLEANUP
 
 1. clean_dot_files on CARD.
 2. file_exists checks: __rpg/, _nds/TWiLightMenu/, _wfwd/, Games/,
-   roms/, BOOT.NDS, _DSMENU.dat, _DS_MENU.dat.
+   BOOT.NDS, _DSMENU.dat, _DS_MENU.dat.
 3. read_file both INI files, verify showHiddenFiles = 0.
 4. list_volumes for disk usage report.
 
@@ -234,10 +232,7 @@ CARD/
 |   +-- TWiLightMenu/
 |       +-- boxart/        # Cover art PNGs
 |       +-- emulators/     # 22 emulator binaries
-+-- Games/                 # NDS ROMs
-+-- roms/                  # Non-NDS ROMs by system
-    +-- gb/ gbc/ gba/ nes/ sfc/ sms/ gg/ gen/ pce/
-    +-- a26/ a52/ a78/ col/ int/ ngp/ ws/
++-- Games/                 # All ROMs (NDS and non-NDS)
 ` + "```" + `
 
 ## SAFETY
@@ -302,14 +297,11 @@ A fully set up {{model_name}} card looks like this:
 |       +-- boxart/                       # Cover art PNGs
 |       +-- gamesettings/
 |       +-- extras/
-+-- roms/                                 # System-specific ROM dirs
-|   +-- nds/ gb/ gbc/ gba/ nes/ snes/ gen/ sms/ gg/ pce/
-|   +-- a26/ a52/ a78/ xegs/ col/ int/ ngp/ ws/ dsi/ mini/ sg/
-+-- Games/                                # User's ROM directory
++-- Games/                                # All ROMs (NDS and non-NDS)
 ` + "```" + `
 
 System files: __rpg/, _wfwd/, _nds/, _DSMENU.dat, _DS_MENU.dat,
-BOOT.NDS, {{forwarder_file}}. User ROMs go in Games/ or roms/<system>/.
+BOOT.NDS, {{forwarder_file}}. All user ROMs go in Games/.
 Box art goes in _nds/TWiLightMenu/boxart/.
 
 ## ROM Identification
@@ -396,7 +388,7 @@ copy to the card. CDN downloads can fail -- retry or use mirrors.
    {{kernel_url}}
    (CDN redirects can fail -- retry or use a SourceForge mirror)
 2. Extract to /tmp/, then copy contents to card root.
-3. Create a Games/ directory at card root for ROMs.
+3. Create a Games/ directory at card root for all ROMs.
 4. Fix __rpg/globalsettings.ini: use read_file to read it, change
    "showHiddenFiles = 1" to "showHiddenFiles = 0", write_file back.
 5. Run clean_dot_files on the entire volume.
@@ -409,11 +401,10 @@ copy to the card. CDN downloads can fail -- retry or use mirrors.
 3. Copy to card in this order (order matters!):
    a. _nds/ to card root (merges with existing)
    b. BOOT.NDS to card root
-   c. roms/ to card root
-   d. snemul.cfg to card root
-   e. Contents of Autoboot/{{autoboot_dir}}/ to card root
+   c. snemul.cfg to card root
+   d. Contents of Autoboot/{{autoboot_dir}}/ to card root
       (overwrites _DSMENU.dat and _DS_MENU.dat)
-   f. Contents of Flashcart Loader/{{loader_dir}}/ to card root
+   e. Contents of Flashcart Loader/{{loader_dir}}/ to card root
       (creates {{forwarder_file}} and _wfwd/)
 4. Fix _wfwd/globalsettings.ini: set showHiddenFiles = 0.
 5. IMPORTANT: Do NOT overwrite _nds/TWiLightMenu/settings.ini if it
