@@ -130,11 +130,10 @@ Run these phases in order for a fresh card.
 3. Copy to CARD in this exact order:
    a. copy_file (recursive): _nds -> CARD/_nds
    b. copy_file: BOOT.NDS -> CARD/BOOT.NDS
-   c. copy_file (recursive): roms -> CARD/roms
-   d. copy_file: snemul.cfg -> CARD/snemul.cfg
-   e. list_directory on "Autoboot/{model_autoboot_dir}/", copy each
+   c. copy_file: snemul.cfg -> CARD/snemul.cfg
+   d. list_directory on "Autoboot/{model_autoboot_dir}/", copy each
       file to CARD root. These are _DSMENU.dat and _DS_MENU.dat.
-   f. list_directory on "Flashcart Loader/{model_loader_dir}/", copy
+   e. list_directory on "Flashcart Loader/{model_loader_dir}/", copy
       each item (recursive for dirs) to CARD root. Creates the
       forwarder file and _wfwd/ directory.
 4. read_file CARD/_wfwd/globalsettings.ini, change
@@ -633,17 +632,14 @@ a. copy_file: /tmp/twilight_menu/_nds -> CARD/_nds (recursive)
 
 b. copy_file: /tmp/twilight_menu/BOOT.NDS -> CARD/BOOT.NDS
 
-c. copy_file: /tmp/twilight_menu/roms -> CARD/roms (recursive)
-   Creates subdirectories for 17+ console systems.
+c. copy_file: /tmp/twilight_menu/snemul.cfg -> CARD/snemul.cfg
 
-d. copy_file: /tmp/twilight_menu/snemul.cfg -> CARD/snemul.cfg
-
-e. Copy contents of Autoboot/{{autoboot_dir}}/ to CARD root:
+d. Copy contents of Autoboot/{{autoboot_dir}}/ to CARD root:
    Call list_directory on "/tmp/twilight_menu/Autoboot/{{autoboot_dir}}/"
    Copy each file to CARD root. These overwrite the Wood R4 boot
    files with TWiLight autoboot wrappers (_DSMENU.dat, _DS_MENU.dat).
 
-f. Copy contents of Flashcart Loader/{{loader_dir}}/ to CARD root:
+e. Copy contents of Flashcart Loader/{{loader_dir}}/ to CARD root:
    Call list_directory on "/tmp/twilight_menu/Flashcart Loader/{{loader_dir}}/"
    Copy each item to CARD root (recursive for directories).
    This creates {{forwarder_file}} and _wfwd/ (TWiLight's kernel loader).
@@ -661,7 +657,7 @@ Call clean_dot_files with path: CARD
 ## Step 9: Verify
 
 Call list_directory on CARD. Confirm these items exist:
-  __rpg/  _nds/  _wfwd/  roms/  Games/
+  __rpg/  _nds/  _wfwd/  Games/
   _DSMENU.dat  _DS_MENU.dat  BOOT.NDS  {{forwarder_file}}  snemul.cfg
 
 Report success. Next step: install emulators (flashcart_emulators).
@@ -783,18 +779,14 @@ the path with the user. Let CARD = the confirmed volume path.
 
 Call create_directory with path: CARD/_nds/TWiLightMenu/boxart
 
-## Step 3: Scan for NDS ROMs
+## Step 3: Scan for ROMs
 
-Call list_directory on CARD/Games. Collect all files ending in .nds.
-
-## Step 4: Scan for Non-NDS ROMs
-
-Call list_directory on CARD/roms. For each subdirectory, call
-list_directory to find ROM files. Collect files with these extensions:
+Call list_directory on CARD/Games. Collect all ROM files.
+NDS ROMs end in .nds. Non-NDS ROMs have extensions like:
 .gb .gbc .gba .nes .sfc .sms .gg .gen .pce .a26 .a52 .a78 .col .int
 .ngp .ws
 
-## Step 5: Download NDS Box Art
+## Step 4: Download NDS Box Art
 
 For each .nds file found:
 
@@ -813,7 +805,7 @@ c. Call download_file with:
 
 d. GameTDB coverS images are already 128x115 -- no resizing needed.
 
-## Step 6: Download Non-NDS Box Art
+## Step 5: Download Non-NDS Box Art
 
 For each non-NDS ROM file found:
 
@@ -840,11 +832,11 @@ e. Call resize_image with:
    The boxart filename for non-NDS games is the full ROM filename
    with .png appended (e.g., "Galaga - Destination Earth (USA).gbc.png").
 
-## Step 7: Clean AppleDouble Files
+## Step 6: Clean AppleDouble Files
 
 Call clean_dot_files with path: CARD
 
-## Step 8: Report Results
+## Step 7: Report Results
 
 List all games and whether box art was found for each one. Note any
 games where art could not be downloaded (homebrew, obscure titles).
@@ -884,24 +876,15 @@ Source ROM: {{source_path}}
 Call list_volumes. Find the FAT32 volume (fsType "msdos"). Confirm
 the path with the user. Let CARD = the confirmed volume path.
 
-## Step 2: Identify the ROM Type
-
-Determine the system from the file extension of the source ROM:
-
-  .nds = Nintendo DS -> copy to CARD/Games/
-  .gb .gbc .gba .nes .sfc .sms .gg .gen .pce .a26 .a52 .a78
-  .col .int .ngp .ws = retro console -> copy to CARD/roms/<ext>/
-
-Where <ext> is the extension without the dot (e.g., .gbc -> roms/gbc/).
-
-## Step 3: Copy the ROM
+## Step 2: Copy the ROM
 
 Call copy_file with:
   source: {{source_path}}
-  destination: CARD/Games/<filename> (for .nds)
-           or: CARD/roms/<ext>/<filename> (for non-NDS)
+  destination: CARD/Games/<filename>
 
-## Step 4: Download Box Art
+TWiLight Menu++ selects the emulator from the file extension.
+
+## Step 3: Download Box Art
 
 For NDS ROMs:
   a. Call read_bytes on the destination path, offset=12, length=4
@@ -928,11 +911,11 @@ For non-NDS ROMs:
        width: 128
        height: 115
 
-## Step 5: Clean AppleDouble Files
+## Step 4: Clean AppleDouble Files
 
 Call clean_dot_files with path: CARD
 
-## Step 6: Confirm
+## Step 5: Confirm
 
 Report the ROM name, where it was placed on the card, and whether
 box art was successfully installed.
@@ -980,8 +963,7 @@ Check that these key directories and files exist using file_exists:
   CARD/__rpg/globalsettings.ini
   CARD/_nds/TWiLightMenu/       (TWiLight Menu++)
   CARD/_wfwd/                   (Flashcart loader)
-  CARD/Games/                   (NDS ROMs)
-  CARD/roms/                    (Non-NDS ROMs)
+  CARD/Games/                   (All ROMs)
   CARD/BOOT.NDS                 (TWiLight binary)
   CARD/_DSMENU.dat              (Autoboot wrapper)
   CARD/_DS_MENU.dat             (Autoboot wrapper)
@@ -1006,11 +988,9 @@ Report total, used, and free space in human-readable format.
 
 ## Step 6: Scan ROMs
 
-Call list_directory on CARD/Games to count NDS ROMs.
-Call list_directory on CARD/roms, then each subdirectory, to count
-non-NDS ROMs by system.
+Call list_directory on CARD/Games to count ROMs.
 
-Report ROM counts by system and total.
+Report ROM count and total.
 `
 
 // handleFlashcartCleanup returns the volume cleanup procedure as an
@@ -1071,12 +1051,10 @@ what you want and Claude will pick the right one.
 
 ## Adding Games
 
-- **NDS games:** Drop .nds files into the Games/ folder on the card
-  (or ask Claude to copy them for you with flashcart_add_game).
-- **Retro games:** Drop ROMs into roms/<system>/ on the card. Claude
-  knows which folder matches which file extension (.gb, .gbc, .gba,
-  .nes, .sfc, .gen, .sms, .gg, .pce, .a26, .a52, .a78, .col, .int,
-  .ngp, .ws).
+- **All games** go in the Games/ folder on the card. TWiLight Menu++
+  picks the right emulator from the file extension (.nds, .gb, .gbc,
+  .gba, .nes, .sfc, .gen, .sms, .gg, .pce, .a26, .a52, .a78, .col,
+  .int, .ngp, .ws). Ask Claude to copy them with flashcart_add_game.
 - **Box art:** Ask Claude to fetch box art after adding games. NDS
   art comes from GameTDB; retro art comes from libretro thumbnails.
 
