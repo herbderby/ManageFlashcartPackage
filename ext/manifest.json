@@ -2,7 +2,7 @@
   "dxt_version": "0.1",
   "name": "flashcart-tools",
   "display_name": "Flashcart Tools",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "description": "Manage Nintendo DS flashcart SD cards",
   "author": {
     "name": "Herb Derby",
@@ -45,7 +45,7 @@
   ],
   "compatibility": {
     "claude_desktop": ">=0.10.0",
-    "platforms": ["darwin"]
+    "platforms": ["darwin", "linux"]
   },
   "license": "MIT"
 }
