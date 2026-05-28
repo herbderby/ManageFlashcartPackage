@@ -88,6 +88,42 @@ research/               # Background research
   `func(ctx, *CallToolRequest, In) (*CallToolResult, Out, error)`
 - No-input tools use `struct{}` as `In` type
 
+## Known Issues
+
+### write_json double-serialization bug
+
+The `write_json` tool (`json_tools.go`) can produce
+double-serialized output. When the MCP client passes a JSON
+object as the `data` parameter, the transport layer may
+deliver it as a pre-serialized JSON string rather than a
+parsed object. Because `WriteJSONInput.Data` is typed `any`,
+Go's `json.Unmarshal` stores it as a `string`. Then
+`json.MarshalIndent` re-serializes that string, wrapping the
+entire file contents in quotes -- producing a JSON string
+value instead of a JSON object on disk.
+
+**Symptom:** The resulting file parses as a JSON string
+containing escaped JSON, not as a JSON object. Tools like
+`claude doctor` that validate settings files will report
+"Expected object, but received string."
+
+**Observed:** 2026-03-12. Claude.ai (Chat) called
+`write_json` to update `~/.claude/settings.json`. The file
+was written as `"{\"cleanupPeriodDays\": 90, ...}"` instead
+of `{"cleanupPeriodDays": 90, ...}`.
+
+**Workaround:** Use `write_file` instead of `write_json` and
+pass the JSON text directly. The `write_file` tool writes the
+content verbatim, avoiding the double-serialization.
+
+**Fix options:**
+
+1. In `handleWriteJSON`, check whether `in.Data` is already a
+   `string` that parses as valid JSON. If so, write it
+   directly instead of re-marshaling.
+2. Alternatively, accept `json.RawMessage` instead of `any`
+   for the `Data` field to preserve the original wire bytes.
+
 ## Development Phase
 
 Phase 0 (complete): `list_volumes` PoC validated via CLI and
