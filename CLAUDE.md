@@ -7,6 +7,12 @@ binary for managing Nintendo DS flashcart SD cards. Claude uses
 the MCP tools plus embedded domain knowledge to prepare and
 maintain cards running TWiLight Menu++ or Wood R4.
 
+## Repository
+
+- **Public** on GitHub (required for Cowork marketplace access — the
+  marketplace fetches `.mcpb` artifacts from a public source).
+- Marketplace name: `flashcart-tools`.
+
 ## Language and Build
 
 - **Language:** Go
