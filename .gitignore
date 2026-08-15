@@ -33,3 +33,7 @@ NEXT.md
 
 # Commit message scratch file
 commit_message
+
+# Claude Code machine-local and transient state
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
