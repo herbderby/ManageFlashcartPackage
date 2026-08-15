@@ -37,3 +37,6 @@ commit_message
 # Claude Code machine-local and transient state
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+
+# Secretary channel file — per-session, never tracked
+BRIEF.md
