@@ -8,7 +8,6 @@
 ## Filesystem and platform
 
 - [macOS filesystem quirks](reference-macos-filesystem-quirks.md) — `Statfs_t` field types, firmlinks vs `os.MkdirAll`, AppleDouple `._*` files on FAT32, system dirs to skip.
-- [TLS fingerprinting on blobfrii](reference-tls-fingerprinting-blobfrii.md) — JA3 fingerprint rejection, uTLS `HelloChrome_Auto` workaround, HTTP/1.1-only ALPN.
 
 ## Flashcart domain
 
