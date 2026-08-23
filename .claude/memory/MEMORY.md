@@ -3,7 +3,6 @@
 ## SDK and runtime
 
 - [Go MCP SDK](reference-go-mcp-sdk.md) — `mcp.NewServer`, typed `AddTool`, prompt handlers, `jsonschema` tag gotcha, in-process testing transports.
-- [MCPB packaging](reference-mcpb-packaging.md) — `prompts` array unsupported in `dxt_version 0.1`; Cowork can't launch binary plugins; Claude Desktop filesystem paths.
 
 ## Filesystem and platform
 
